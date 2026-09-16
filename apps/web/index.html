@@ -121,6 +121,20 @@
               chrome: "oklch(0.225975 0.031062 293.741)",
             },
           },
+          "gentle-rose": {
+            light: {
+              background: "oklch(0.977831 0.00661 340.387)",
+              foreground: "oklch(0.199425 0.035638 343.411)",
+              accent: "oklch(0.613141 0.160918 344.348)",
+              chrome: "oklch(0.977831 0.00661 340.387)",
+            },
+            dark: {
+              background: "oklch(0.195078 0.017376 335.306)",
+              foreground: "oklch(0.950693 0.030394 345.959)",
+              accent: "oklch(0.777876 0.125419 345.718)",
+              chrome: "oklch(0.195078 0.017376 335.306)",
+            },
+          },
         };
         // Keep the built-in mode list in sync with the runtime so the selected
         // T3 Chat palette is visible before React has mounted.
@@ -139,6 +153,7 @@
           "ocean",
           "ember",
           "iris",
+          "gentle-rose",
           "t3-chat-dark",
           "t3-grove",
           "t3-ocean",
@@ -477,13 +492,13 @@
         cursor: pointer;
       }
     </style>
-    <title>T3 Code (Alpha)</title>
+    <title>Gentle ADE (Alpha)</title>
   </head>
   <body>
     <div id="root">
       <div id="boot-shell">
-        <div id="boot-shell-card" aria-label="T3 Code splash screen">
-          <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="T3 Code" />
+        <div id="boot-shell-card" aria-label="Gentle ADE splash screen">
+          <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="Gentle ADE" />
         </div>
       </div>
     </div>
