@@ -72,7 +72,7 @@ export const GENTLE_AI_AGENTS: ReadonlyArray<GentleAiAgentDescriptor> = [
   {
     id: "kilocode",
     name: "Kilo Code",
-    configPath: "~/.kilocode",
+    configPath: "~/.config/kilo",
     description: "VS Code extension agent configured through a user-level rules directory.",
   },
   {
@@ -138,7 +138,7 @@ export const GENTLE_AI_AGENTS: ReadonlyArray<GentleAiAgentDescriptor> = [
   {
     id: "pi",
     name: "Pi",
-    configPath: "~/.pi/agent",
+    configPath: "~/.pi",
     description: "Pi agent runtime; hosts the gentle-pi relay used by the review lifecycle.",
   },
   {

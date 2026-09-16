@@ -6,7 +6,7 @@ import { Link, useCanGoBack, useLocation, useNavigate } from "@tanstack/react-ro
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
-import { T3Wordmark } from "../T3Wordmark";
+import { GentleWordmark } from "../GentleWordmark";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
@@ -89,14 +89,15 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
     >
       {/* Center the visible capitals, without the font's ascender/descender space. */}
       <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
-        <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
+        <GentleWordmark aria-hidden className="h-[1.15cap] w-auto shrink-0 self-center" />
+        <span className="truncate [text-box:trim-both_cap_alphabetic]">Gentle</span>
         <span
           className={cn(
             "truncate [text-box:trim-both_cap_alphabetic]",
             onBackdrop ? "text-white/70" : "text-muted-foreground",
           )}
         >
-          Code
+          ADE
         </span>
       </span>
     </Link>
