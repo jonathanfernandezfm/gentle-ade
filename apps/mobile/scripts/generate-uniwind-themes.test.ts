@@ -36,6 +36,8 @@ describe("generate mobile Uniwind themes", () => {
       "ember-dark",
       "iris-light",
       "iris-dark",
+      "gentle-rose-light",
+      "gentle-rose-dark",
     ]);
 
     const stylesheet = renderUniwindThemesCSS();
