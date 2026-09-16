@@ -73,6 +73,7 @@ import { deviceHubProxyRouteLayer } from "./device/DeviceHubProxy.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as ProcessRunner from "./processRunner.ts";
+import * as GentleAiService from "./gentleAi/GentleAiService.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
@@ -391,6 +392,11 @@ const CheckpointingLayerLive = Layer.empty.pipe(
 
 const PortScannerLayerLive = PortScanner.layer.pipe(Layer.provide(ProcessRunner.layer));
 
+// The Gentle AI hub only ever shells out to the `gentle-ai` CLI and reads files
+// under the user's home and workspace, so `ProcessRunner` is its whole
+// dependency beyond the platform services.
+const GentleAiLayerLive = GentleAiService.layer.pipe(Layer.provide(ProcessRunner.layer));
+
 const TerminalLayerLive = TerminalManager.layer.pipe(
   Layer.provide(PtyAdapterLive),
   Layer.provide(PortScannerLayerLive),
@@ -493,7 +499,9 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(GitLayerLive),
   Layer.provideMerge(VcsLayerLive),
   Layer.provideMerge(ProviderRuntimeLayerLive),
-  Layer.provideMerge(Layer.mergeAll(TerminalLayerLive, PreviewLayerLive, DeviceLayerLive)),
+  Layer.provideMerge(
+    Layer.mergeAll(TerminalLayerLive, PreviewLayerLive, DeviceLayerLive, GentleAiLayerLive),
+  ),
   Layer.provideMerge(PersistenceLayerLive),
   // Both read a user-owned file out of the state directory and stream changes
   // to clients; neither depends on the other.

@@ -14,6 +14,21 @@ import {
 
 import { ExternalLauncherError, LaunchEditorInput } from "./editor.ts";
 import {
+  GentleAiBinaryNotFoundError,
+  GentleAiCommandEvent,
+  GentleAiCommandFailedError,
+  GentleAiDoctorReport,
+  GentleAiProjectStatus,
+  GentleAiReviewModeOptions,
+  GentleAiReviewModeState,
+  GentleAiRunRequest,
+  GentleAiSkillRegistryState,
+  GentleAiStateParseError,
+  GentleAiStatus,
+  GentleAiUpdateReport,
+  GentleAiWorkspaceInput,
+} from "./gentleAi.ts";
+import {
   AuthAccessStreamError,
   AuthAccessStreamEvent,
   EnvironmentAuthorizationError,
@@ -380,6 +395,15 @@ export const WS_METHODS = {
   serverGetUsageSummary: "server.getUsageSummary",
   serverRefreshUsageRates: "server.refreshUsageRates",
 
+  // Gentle AI hub methods
+  gentleAiGetStatus: "gentleAi.getStatus",
+  gentleAiGetProjectStatus: "gentleAi.getProjectStatus",
+  gentleAiRunDoctor: "gentleAi.runDoctor",
+  gentleAiCheckUpdates: "gentleAi.checkUpdates",
+  gentleAiRunCommand: "gentleAi.runCommand",
+  gentleAiSetReviewMode: "gentleAi.setReviewMode",
+  gentleAiRefreshSkillRegistry: "gentleAi.refreshSkillRegistry",
+
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -643,6 +667,65 @@ const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
   payload: ServerSignalProcessInput,
   success: ServerSignalProcessResult,
   error: EnvironmentAuthorizationError,
+});
+
+/**
+ * Errors every Gentle AI RPC can answer with. The binary being absent is a
+ * first-class outcome rather than a fault: the hub's whole job on a fresh
+ * machine is to show that and offer the install.
+ */
+const GentleAiRpcError = Schema.Union([
+  GentleAiBinaryNotFoundError,
+  GentleAiCommandFailedError,
+  GentleAiStateParseError,
+  EnvironmentAuthorizationError,
+]);
+
+const WsGentleAiGetStatusRpc = Rpc.make(WS_METHODS.gentleAiGetStatus, {
+  payload: Schema.Struct({}),
+  success: GentleAiStatus,
+  error: GentleAiRpcError,
+});
+
+const WsGentleAiGetProjectStatusRpc = Rpc.make(WS_METHODS.gentleAiGetProjectStatus, {
+  payload: GentleAiWorkspaceInput,
+  success: GentleAiProjectStatus,
+  error: GentleAiRpcError,
+});
+
+const WsGentleAiRunDoctorRpc = Rpc.make(WS_METHODS.gentleAiRunDoctor, {
+  payload: Schema.Struct({}),
+  success: GentleAiDoctorReport,
+  error: GentleAiRpcError,
+});
+
+const WsGentleAiCheckUpdatesRpc = Rpc.make(WS_METHODS.gentleAiCheckUpdates, {
+  payload: Schema.Struct({}),
+  success: GentleAiUpdateReport,
+  error: GentleAiRpcError,
+});
+
+/**
+ * Streams one command run line by line so the hub's console shows progress
+ * while a multi-minute install is still going.
+ */
+const WsGentleAiRunCommandRpc = Rpc.make(WS_METHODS.gentleAiRunCommand, {
+  payload: GentleAiRunRequest,
+  success: GentleAiCommandEvent,
+  error: GentleAiRpcError,
+  stream: true,
+});
+
+const WsGentleAiSetReviewModeRpc = Rpc.make(WS_METHODS.gentleAiSetReviewMode, {
+  payload: GentleAiReviewModeOptions,
+  success: Schema.NullOr(GentleAiReviewModeState),
+  error: GentleAiRpcError,
+});
+
+const WsGentleAiRefreshSkillRegistryRpc = Rpc.make(WS_METHODS.gentleAiRefreshSkillRegistry, {
+  payload: GentleAiWorkspaceInput,
+  success: GentleAiSkillRegistryState,
+  error: GentleAiRpcError,
 });
 
 const WsCloudGetRelayClientStatusRpc = Rpc.make(WS_METHODS.cloudGetRelayClientStatus, {
@@ -1392,6 +1475,13 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,
+  WsGentleAiGetStatusRpc,
+  WsGentleAiGetProjectStatusRpc,
+  WsGentleAiRunDoctorRpc,
+  WsGentleAiCheckUpdatesRpc,
+  WsGentleAiRunCommandRpc,
+  WsGentleAiSetReviewModeRpc,
+  WsGentleAiRefreshSkillRegistryRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsPullRequestsListRpc,

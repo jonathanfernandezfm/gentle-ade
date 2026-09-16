@@ -180,6 +180,7 @@ import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
+import * as GentleAiService from "./gentleAi/GentleAiService.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -827,6 +828,10 @@ const buildAppUnderTest = (options?: {
             currentReadiness: () => Effect.succeed(null),
             sessionsForThread: () => Effect.succeed([]),
           }),
+          // The Gentle AI hub only ever shells out to a CLI that may not be
+          // installed on a test machine, so nothing here is stubbed: a test that
+          // reaches these methods should fail loudly rather than probe the host.
+          Layer.mock(GentleAiService.GentleAiService)({}),
         ),
       ),
       Layer.provide(

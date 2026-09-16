@@ -148,6 +148,7 @@ import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
+import * as GentleAiService from "./gentleAi/GentleAiService.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
@@ -665,6 +666,7 @@ const makeWsRpcLayer = (
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const usage = yield* UsageService.UsageService;
       const relayClient = yield* RelayClient.RelayClient;
+      const gentleAi = yield* GentleAiService.GentleAiService;
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
           message: `The authenticated token is missing required scope: ${requiredScope}.`,
@@ -2626,6 +2628,38 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverGetBackgroundPolicy, backgroundPolicy.snapshot, {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.gentleAiGetStatus]: (_input) =>
+          observeRpcEffect(WS_METHODS.gentleAiGetStatus, gentleAi.getStatus, {
+            "rpc.aggregate": "gentleAi",
+          }),
+        [WS_METHODS.gentleAiGetProjectStatus]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.gentleAiGetProjectStatus,
+            gentleAi.getProjectStatus({ workspaceRoot: input.workspaceRoot }),
+            { "rpc.aggregate": "gentleAi" },
+          ),
+        [WS_METHODS.gentleAiRunDoctor]: (_input) =>
+          observeRpcEffect(WS_METHODS.gentleAiRunDoctor, gentleAi.runDoctor, {
+            "rpc.aggregate": "gentleAi",
+          }),
+        [WS_METHODS.gentleAiCheckUpdates]: (_input) =>
+          observeRpcEffect(WS_METHODS.gentleAiCheckUpdates, gentleAi.checkUpdates, {
+            "rpc.aggregate": "gentleAi",
+          }),
+        [WS_METHODS.gentleAiRunCommand]: (input) =>
+          observeRpcStream(WS_METHODS.gentleAiRunCommand, gentleAi.runCommand(input), {
+            "rpc.aggregate": "gentleAi",
+          }),
+        [WS_METHODS.gentleAiSetReviewMode]: (input) =>
+          observeRpcEffect(WS_METHODS.gentleAiSetReviewMode, gentleAi.setReviewMode(input), {
+            "rpc.aggregate": "gentleAi",
+          }),
+        [WS_METHODS.gentleAiRefreshSkillRegistry]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.gentleAiRefreshSkillRegistry,
+            gentleAi.refreshSkillRegistry({ workspaceRoot: input.workspaceRoot }),
+            { "rpc.aggregate": "gentleAi" },
+          ),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
           observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {
             "rpc.aggregate": "cloud",
