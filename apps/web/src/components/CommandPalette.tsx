@@ -50,6 +50,7 @@ import {
   MessageSquareIcon,
   PaletteIcon,
   SettingsIcon,
+  SparklesIcon,
   SquarePenIcon,
   TextSearchIcon,
 } from "lucide-react";
@@ -1827,6 +1828,31 @@ function OpenCommandPaletteDialog(props: {
     icon: <SettingsIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       await navigate({ to: "/settings" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:gentle-ai",
+    searchTerms: [
+      "gentle",
+      "ai",
+      "ade",
+      "engram",
+      "memory",
+      "sdd",
+      "odd",
+      "rdd",
+      "skills",
+      "persona",
+      "agents",
+      "install",
+      "doctor",
+    ],
+    title: "Open Gentle AI hub",
+    icon: <SparklesIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/gentle-ai" });
     },
   });
 

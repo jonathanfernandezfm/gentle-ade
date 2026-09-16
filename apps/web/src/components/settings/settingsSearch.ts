@@ -15,6 +15,7 @@ export type SettingsPath =
   | "/settings/keybindings"
   | "/settings/snap-shot"
   | "/settings/providers"
+  | "/settings/gentle-ai"
   | "/settings/integrations"
   | "/settings/source-control"
   | "/settings/connections"
@@ -78,6 +79,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/keybindings": "Keybindings",
   "/settings/snap-shot": "SnapShots",
   "/settings/providers": "Providers",
+  "/settings/gentle-ai": "Gentle AI",
   "/settings/integrations": "Integrations",
   "/settings/source-control": "Source Control",
   "/settings/connections": "Connections",
@@ -487,6 +489,36 @@ export const SETTINGS_SEARCH_ITEMS = [
     providerSettingsOnly: true,
   },
   {
+    id: "gentle-ai",
+    title: "Gentle AI",
+    to: "/settings/gentle-ai",
+    searchTerms: [
+      "gentle ade engram memory sdd spec driven development odd organic rdd receipts review skills persona preset agents install sync doctor upgrade binary cli hub",
+    ],
+  },
+  {
+    id: "gentle-ai-rdd",
+    title: "Receipt-Driven Development",
+    to: "/settings/gentle-ai",
+    searchTerms: [
+      "rdd review mode receipts adversarial consent candidate gentle ai enable disable",
+    ],
+  },
+  {
+    id: "gentle-ai-persona",
+    title: "Gentle AI persona",
+    to: "/settings/gentle-ai",
+    searchTerms: ["gentleman neutral output style voice artifacts tone"],
+  },
+  {
+    id: "gentle-ai-agents",
+    title: "Configured agents",
+    to: "/settings/gentle-ai",
+    searchTerms: [
+      "claude code opencode codex cursor gemini copilot windsurf kimi qwen kiro openclaw pi trae hermes antigravity kilocode gentle ai",
+    ],
+  },
+  {
     id: "agent-browser-access",
     title: "Agent browser access",
     to: "/settings/integrations",
@@ -745,6 +777,9 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   // environment at any selection. Neither needs a particular scope to render.
   "/settings/keybindings": null,
   "/settings/providers": null,
+  // Gentle AI is installed per machine, not per project: the panel renders at
+  // every selection and reads the primary environment.
+  "/settings/gentle-ai": null,
   "/settings/integrations": null,
   "/settings/source-control": "environment-defaults",
   "/settings/connections": "connections",
