@@ -69,6 +69,41 @@ For the currently open project, shows:
 Streams the stdout/stderr of whichever `gentle-ai` command is currently running (install, sync,
 upgrade, uninstall, or `doctor`/`update`), and refreshes the panels above once the command exits.
 
+## Flows in the composer
+
+The composer has a **Gentle AI flow** picker next to the runtime-mode control (in the compact
+composer it lives under the "…" menu as "Flow"). It puts the composer into one Gentle AI process
+and turns whatever you type into the right invocation for the selected agent:
+
+- **Organic** (default) sends your text unchanged.
+- **SDD** flows (Initialize project, New change, Explore, Research, Fast-forward planning,
+  Continue, Apply, Verify, Archive, Status, Onboard) send the matching command: `/gentle-sdd-*`
+  on Claude Code, `/sdd-*` on OpenCode, `$skill` mentions on Codex.
+- **Review** (Judgment Day) and **Workflow** flows (Chained PRs, Work-unit commits, Skill creator,
+  Skill improver, Skill registry, Doc design, Go testing) send the skill by name.
+
+The picker checks the agent's installed commands and skills for the current project and says
+how each flow will be sent. When an agent has neither the command nor the skill, the flow is
+sent as plain instructions naming the workflow instead of an unexpanded `/command`. A selected
+flow tints the composer border (rose for SDD, amber for review, teal for workflow) and swaps the
+placeholder; one-shot flows such as New change or Status return the composer to Organic after
+sending, the others stay selected until you change them.
+
+In the thread, every message sent from a flow gets a **started** mark above it and a
+**finished** mark (with duration, or "stopped"/"failed") once the agent's turn settles. Claude's
+`Skill` tool calls show as "Skill · <name>", and sub-agents Gentle AI spawns (`sdd-*`, `jd-*`,
+`review-*` roles) carry a small "Gentle" tag.
+
+## Project readiness
+
+Gentle AI flows expect a repository that ran `sdd-init`: it writes `.atl/skill-registry.md` and
+the `openspec/config.yaml` workspace. When either is missing in a git repository, the composer
+shows a **Gentle AI isn't set up in this repository** banner. "Set up with SDD init" switches the
+composer to the Initialize project flow so the next message runs it; "Open Gentle AI hub" jumps
+to the per-project panel, which also lists the readiness state. Dismissing the banner hides it
+for that repository only. When an active SDD change exists, the thread header shows an
+`SDD · <change> · n/m tasks` chip that opens the same panel.
+
 ## Doctor and updates
 
 - **Run diagnostics** runs `gentle-ai doctor` and shows its plain-text output.
