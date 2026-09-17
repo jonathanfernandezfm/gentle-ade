@@ -1602,6 +1602,17 @@ describe("buildRunningThreadTurnInterruptInput", () => {
 });
 
 describe("deriveComposerSendState", () => {
+  it("lets a selected Gentle AI flow send without typed text", () => {
+    const empty = { prompt: "   ", imageCount: 0, terminalContexts: [] };
+    expect(deriveComposerSendState(empty).hasSendableContent).toBe(false);
+    expect(deriveComposerSendState({ ...empty, gentleAiFlow: null }).hasSendableContent).toBe(
+      false,
+    );
+    expect(
+      deriveComposerSendState({ ...empty, gentleAiFlow: "sdd-status" }).hasSendableContent,
+    ).toBe(true);
+  });
+
   it("treats expired terminal pills as non-sendable content", () => {
     const state = deriveComposerSendState({
       prompt: "[Terminal 1 line 4](t3-context://v1/terminal/ctx-expired)",

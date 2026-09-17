@@ -2743,6 +2743,70 @@ describe("composerDraftStore runtime and interaction settings", () => {
 
     expect(draftFor(threadId, TEST_ENVIRONMENT_ID)).toBeUndefined();
   });
+
+  it("stores the Gentle AI flow as a per-thread mode and treats organic as cleared", () => {
+    const store = useComposerDraftStore.getState();
+
+    store.setGentleAiFlow(threadRef, "sdd-new");
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.gentleAiFlow).toBe("sdd-new");
+    expect(composerDraftHasUserContent(draftFor(threadId, TEST_ENVIRONMENT_ID))).toBe(false);
+
+    store.setGentleAiFlow(threadRef, "organic");
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)).toBeUndefined();
+
+    store.setGentleAiFlow(threadRef, "judgment-day");
+    store.setGentleAiFlow(threadRef, null);
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)).toBeUndefined();
+  });
+
+  it("persists the Gentle AI flow and defaults drafts from older storage to organic", async () => {
+    await useComposerDraftStore.persist.clearStorage();
+    vi.useFakeTimers();
+    try {
+      const legacyThreadId = ThreadId.make("thread-flow-legacy");
+      const unknownFlowThreadId = ThreadId.make("thread-flow-unknown");
+      const legacyKey = scopedThreadKey(scopeThreadRef(TEST_ENVIRONMENT_ID, legacyThreadId));
+      const unknownKey = scopedThreadKey(scopeThreadRef(TEST_ENVIRONMENT_ID, unknownFlowThreadId));
+      const storage = useComposerDraftStore.persist.getOptions().storage;
+      expect(storage).toBeDefined();
+      storage?.setItem(COMPOSER_DRAFT_STORAGE_KEY, {
+        version: 9,
+        state: {
+          draftsByThreadKey: {
+            [legacyKey]: { prompt: "older draft", attachments: [], interactionMode: "plan" },
+            [unknownKey]: {
+              prompt: "",
+              attachments: [],
+              gentleAiFlow: "sdd-from-the-future",
+            },
+          },
+          draftThreadsByThreadKey: {},
+          logicalProjectDraftThreadKeyByLogicalProjectKey: {},
+          stickyModelSelectionByProvider: {},
+          stickyActiveProvider: null,
+        },
+      } as never);
+      await vi.advanceTimersByTimeAsync(300);
+      await useComposerDraftStore.persist.rehydrate();
+
+      expect(draftFor(legacyThreadId, TEST_ENVIRONMENT_ID)).toMatchObject({
+        prompt: "older draft",
+        interactionMode: "plan",
+        gentleAiFlow: null,
+      });
+      expect(draftFor(unknownFlowThreadId, TEST_ENVIRONMENT_ID)).toBeUndefined();
+
+      useComposerDraftStore.getState().setGentleAiFlow(threadRef, "sdd-apply");
+      await vi.advanceTimersByTimeAsync(300);
+      resetComposerDraftStore();
+      await useComposerDraftStore.persist.rehydrate();
+      expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.gentleAiFlow).toBe("sdd-apply");
+    } finally {
+      await useComposerDraftStore.persist.clearStorage();
+      vi.useRealTimers();
+      resetComposerDraftStore();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

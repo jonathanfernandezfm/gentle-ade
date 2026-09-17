@@ -29,6 +29,8 @@ import {
   type ProviderApprovalDecision,
   type PreviewAnnotationPayload,
   ProviderInstanceId,
+  GENTLE_AI_FLOW_BY_ID,
+  type GentleAiFlowId,
   type ServerProvider,
   type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
@@ -303,6 +305,8 @@ import {
   stripInlineContextReferences,
 } from "../lib/composerContextReferences";
 import { serializeLegacyContextMessage } from "@t3tools/shared/composerContextLegacySend";
+import { buildGentleAiFlowInvocation } from "@t3tools/shared/gentleAiFlow";
+import { useGentleReadinessBanner } from "./chat/GentleReadinessBanner";
 import {
   buildMessageContext,
   previewAnnotationContextLabel,
@@ -1588,6 +1592,9 @@ export default function ChatView(props: ChatViewProps) {
   const composerInteractionMode = useComposerDraftStore(
     (store) => store.getComposerDraft(composerDraftTarget)?.interactionMode ?? null,
   );
+  const composerGentleAiFlow = useComposerDraftStore(
+    (store) => store.getComposerDraft(composerDraftTarget)?.gentleAiFlow ?? null,
+  );
   const composerActiveProvider = useComposerDraftStore(
     (store) => store.getComposerDraft(composerDraftTarget)?.activeProvider ?? null,
   );
@@ -1618,6 +1625,7 @@ export default function ChatView(props: ChatViewProps) {
   const setComposerDraftInteractionMode = useComposerDraftStore(
     (store) => store.setInteractionMode,
   );
+  const setComposerDraftGentleAiFlow = useComposerDraftStore((store) => store.setGentleAiFlow);
   const clearComposerDraftContent = useComposerDraftStore((store) => store.clearComposerContent);
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const getDraftSessionByLogicalProjectKey = useComposerDraftStore(
@@ -4467,6 +4475,36 @@ export default function ChatView(props: ChatViewProps) {
     if (!interactionModeEnabled) return;
     handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
   }, [handleInteractionModeChange, interactionMode, interactionModeEnabled]);
+  const handleGentleAiFlowChange = useCallback(
+    (flow: GentleAiFlowId | null) => {
+      setComposerDraftGentleAiFlow(composerDraftTarget, flow);
+      scheduleComposerFocus();
+    },
+    [composerDraftTarget, scheduleComposerFocus, setComposerDraftGentleAiFlow],
+  );
+  const startGentleSddInitFlow = useCallback(
+    () => handleGentleAiFlowChange("sdd-init"),
+    [handleGentleAiFlowChange],
+  );
+  const openGentleAiHub = useCallback(() => {
+    void navigate({ to: "/gentle-ai" });
+  }, [navigate]);
+  const gentleReadiness = useGentleReadinessBanner({
+    environmentId,
+    workspaceRoot: activeProjectCwd,
+    isGitRepo,
+    onStartSddInit: startGentleSddInitFlow,
+    onOpenHub: openGentleAiHub,
+  });
+  // Set when a turn goes out in the `sdd-init` flow; the project status is
+  // re-read once that turn settles, so the readiness banner clears itself.
+  const gentleSddInitRefreshPendingRef = useRef(false);
+  const refreshGentleProjectStatus = gentleReadiness.refreshProjectStatus;
+  useEffect(() => {
+    if (!latestTurnSettled || !gentleSddInitRefreshPendingRef.current) return;
+    gentleSddInitRefreshPendingRef.current = false;
+    refreshGentleProjectStatus();
+  }, [latestTurnSettled, refreshGentleProjectStatus]);
   const openProviderSetup = useCallback(
     (instanceId: ProviderInstanceId) => {
       void navigate({
@@ -6439,6 +6477,7 @@ export default function ChatView(props: ChatViewProps) {
         ...feedbackBannerItems,
         ...usageLimitsItems,
         ...projectCloneItems,
+        ...gentleReadiness.items,
         ...systemComposerBannerItems,
         ...backgroundLivenessItems,
         ...resumeCompactionItems,
@@ -6450,6 +6489,7 @@ export default function ChatView(props: ChatViewProps) {
       ...feedbackBannerItems,
       ...usageLimitsItems,
       ...projectCloneItems,
+      ...gentleReadiness.items,
       ...systemComposerBannerItems,
       ...backgroundLivenessItems,
       ...resumeCompactionItems,
@@ -6498,6 +6538,7 @@ export default function ChatView(props: ChatViewProps) {
     activeBranchMismatchKey,
     backgroundLivenessBannerItem,
     feedbackBannerItems,
+    gentleReadiness.items,
     handleRestoreThreadBranch,
     isRestoringThreadBranch,
     localCheckoutBranchMismatch,
@@ -7317,7 +7358,11 @@ export default function ChatView(props: ChatViewProps) {
       selectedModelSelection: ctxSelectedModelSelection,
       interactionMode: sendInteractionMode,
       interactionModeEnabled: sendInteractionModeEnabled,
+      gentleAiFlowAvailability: ctxGentleAiFlowAvailability,
     } = sendCtx;
+    // Read once so the invocation, the context marker and the one-shot reset
+    // all refer to the flow the message actually went out in.
+    const sendGentleAiFlow = composerGentleAiFlow;
     const annotationImageAlreadyAttached =
       directAnnotation?.image !== undefined &&
       sendContextImages.some((image) => image.id === directAnnotation.image?.id);
@@ -7369,6 +7414,7 @@ export default function ChatView(props: ChatViewProps) {
       imageCount: composerImages.length + composerFiles.length,
       terminalContexts: composerTerminalContexts,
       elementContextCount: composerPreviewAnnotations.length + composerReviewComments.length,
+      gentleAiFlow: sendGentleAiFlow,
     });
     const feedbackCommand =
       ctxSelectedProvider === "codex" &&
@@ -7616,16 +7662,27 @@ export default function ChatView(props: ChatViewProps) {
           attachment,
           attachmentId: attachmentIds[index] ?? attachment.id,
         })),
+        gentleAiFlow: sendGentleAiFlow,
       });
     const outgoingMessageContext = buildOutgoingMessageContext(
       composerAttachmentsSnapshot.map((attachment) => attachment.id),
     );
+    // The flow token leads the text; the effort prefix below leaves a leading
+    // slash alone, and context envelopes append after the body.
+    const gentleAiFlowInvocation = buildGentleAiFlowInvocation({
+      flowId: sendGentleAiFlow ?? "organic",
+      provider: ctxSelectedProvider,
+      text:
+        messageTextForSend || (sendGentleAiFlow === null ? ATTACHMENT_ONLY_BOOTSTRAP_PROMPT : ""),
+      availableSlashCommands: ctxGentleAiFlowAvailability.slashCommands,
+      availableSkills: ctxGentleAiFlowAvailability.skills,
+    });
     const outgoingMessageText = formatOutgoingPrompt({
       provider: ctxSelectedProvider,
       model: ctxSelectedModel,
       models: ctxSelectedProviderModels,
       effort: ctxSelectedPromptEffort,
-      text: messageTextForSend || ATTACHMENT_ONLY_BOOTSTRAP_PROMPT,
+      text: gentleAiFlowInvocation.text,
     });
     if (composerRef.current?.validateProviderInput(outgoingMessageText) === false) {
       // A queued message that no longer fits is held at the head for the
@@ -8052,6 +8109,16 @@ export default function ChatView(props: ChatViewProps) {
         failure = startResult;
       } else {
         turnStartSucceeded = true;
+        if (sendGentleAiFlow !== null) {
+          if (sendGentleAiFlow === "sdd-init") {
+            gentleSddInitRefreshPendingRef.current = true;
+          }
+          // One-shot flows return the composer to Organic; a failed send above
+          // keeps the flow with the restored draft instead.
+          if (GENTLE_AI_FLOW_BY_ID.get(sendGentleAiFlow)?.oneShot) {
+            setComposerDraftGentleAiFlow(composerDraftTarget, null);
+          }
+        }
         // The turn is under way and will spend quota, so that thread's limits
         // snapshot is stale. Uploads may have outlasted a navigation, so only
         // the sending thread's panel clears.
@@ -9417,6 +9484,7 @@ export default function ChatView(props: ChatViewProps) {
             availableEditors={availableEditors}
             rightPanelOpen={rightPanelOpen}
             gitCwd={gitCwd}
+            gentleSddStatus={gentleReadiness.projectStatus?.sddStatus ?? null}
             onNewThreadInProject={handleNewThreadInActiveProject}
             {...(activeDraftLogicalProjectKey
               ? { onOpenProjectSettings: handleOpenDraftProjectSettings }
@@ -9693,6 +9761,7 @@ export default function ChatView(props: ChatViewProps) {
                             threadSyncPhase={activeEnvironmentUnavailable ? null : threadSyncPhase}
                             runtimeMode={runtimeMode}
                             interactionMode={interactionMode}
+                            gentleAiFlow={composerGentleAiFlow}
                             lockedProvider={lockedProvider}
                             providerStatuses={providerStatuses as ServerProvider[]}
                             providerCatalogKnown={serverConfig !== null}
@@ -9752,6 +9821,7 @@ export default function ChatView(props: ChatViewProps) {
                             toggleInteractionMode={toggleInteractionMode}
                             handleRuntimeModeChange={handleRuntimeModeChange}
                             handleInteractionModeChange={handleInteractionModeChange}
+                            onGentleAiFlowChange={handleGentleAiFlowChange}
                             focusComposer={focusComposer}
                             scheduleComposerFocus={scheduleComposerFocus}
                             setThreadError={setThreadError}

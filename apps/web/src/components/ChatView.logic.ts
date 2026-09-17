@@ -4,6 +4,7 @@ import {
   type AssetCreateUrlResult,
   type ChatFileAttachment,
   type EnvironmentId,
+  type GentleAiFlowId,
   isProviderDriverKind,
   ProjectId,
   type MessageId,
@@ -946,6 +947,11 @@ export function deriveComposerSendState(options: {
    * contexts do: a prompt of just element chips is still a valid send.
    */
   elementContextCount?: number;
+  /**
+   * A selected Gentle AI flow is sendable on its own: many flows take an
+   * optional prompt ("SDD · Status"), and the invocation token is the message.
+   */
+  gentleAiFlow?: GentleAiFlowId | null;
 }): {
   trimmedPrompt: string;
   sendableTerminalContexts: TerminalContextDraft[];
@@ -965,7 +971,8 @@ export function deriveComposerSendState(options: {
       trimmedPrompt.length > 0 ||
       options.imageCount > 0 ||
       sendableTerminalContexts.length > 0 ||
-      elementContextCount > 0,
+      elementContextCount > 0 ||
+      (options.gentleAiFlow ?? null) !== null,
   };
 }
 

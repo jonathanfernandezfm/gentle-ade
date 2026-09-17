@@ -73,6 +73,37 @@ const ULTRATHINK_FRAME_CLASSES = {
 } as const;
 
 describe("getComposerProviderState", () => {
+  it("tints the frame per Gentle AI flow group and lets ultrathink win", () => {
+    const models = modelWith([
+      selectDescriptor("effort", [{ id: "max", label: "Max", isDefault: true }], ["max"]),
+    ]);
+    const base = {
+      provider: PROVIDER,
+      model: MODEL,
+      models,
+      modelOptions: undefined,
+      planModeEnabled: true,
+    };
+
+    expect(getComposerProviderState({ ...base, gentleAiFlow: null })).not.toHaveProperty(
+      "composerFrameClassName",
+    );
+    expect(getComposerProviderState({ ...base, gentleAiFlow: "sdd-new" })).toMatchObject({
+      composerFrameClassName: "gentle-flow-frame gentle-flow-frame--sdd",
+      composerSurfaceClassName: "gentle-flow-surface",
+    });
+    expect(getComposerProviderState({ ...base, gentleAiFlow: "judgment-day" })).toMatchObject({
+      composerFrameClassName: "gentle-flow-frame gentle-flow-frame--review",
+    });
+    expect(
+      getComposerProviderState({
+        ...base,
+        gentleAiFlow: "chained-pr",
+        promptInjectionState: "ultrathink",
+      }),
+    ).toMatchObject(ULTRATHINK_FRAME_CLASSES);
+  });
+
   it("derives a stable prompt injection state for ordinary prompt edits", () => {
     expect(getComposerPromptInjectionState("Investigate this failure")).toBe("none");
     expect(getComposerPromptInjectionState("Ultrathink:\nInvestigate this failure")).toBe(

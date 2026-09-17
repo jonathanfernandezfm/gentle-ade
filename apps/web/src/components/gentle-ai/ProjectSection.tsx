@@ -10,6 +10,7 @@
  * @module components/gentle-ai/ProjectSection
  */
 import type { GentleAiProjectStatus, GentleAiRiskTier, GentleAiStatus } from "@t3tools/contracts";
+import { deriveGentleAiProjectReadiness } from "@t3tools/contracts";
 import {
   BrainIcon,
   ChevronDownIcon,
@@ -229,6 +230,25 @@ function RiskCard({ project }: { readonly project: GentleAiProjectStatus }) {
   );
 }
 
+/**
+ * One line answering "did `sdd-init` ever run here?". The `partial` case names
+ * the half that is missing, because that is the actionable part.
+ */
+function describeReadiness(project: GentleAiProjectStatus): string {
+  switch (deriveGentleAiProjectReadiness(project)) {
+    case "ready":
+      return "Ready";
+    case "partial":
+      return project.skillRegistry.present
+        ? "Partial (missing openspec/config.yaml)"
+        : "Partial (missing .atl/skill-registry.md)";
+    case "missing":
+      return "Missing";
+    case "not-applicable":
+      return "Not a git repository";
+  }
+}
+
 function WorkspaceAssetsCard({
   project,
   workspaceRoot,
@@ -279,6 +299,7 @@ function WorkspaceAssetsCard({
           }
         />
         <GentleField label="Registry path" value={project.skillRegistry.path} mono />
+        <GentleField label="Readiness" value={describeReadiness(project)} />
         <GentleField
           label="Engram folder"
           value={project.engramPresent ? "present" : "not found"}

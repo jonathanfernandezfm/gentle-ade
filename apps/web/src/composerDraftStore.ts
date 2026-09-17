@@ -2,6 +2,8 @@ import { elementContextToPreviewAnnotation } from "./lib/elementContext";
 import {
   ElementContextDetails,
   DEFAULT_MODEL,
+  GENTLE_AI_FLOW_BY_ID,
+  GentleAiFlowId,
   DEFAULT_MODEL_BY_PROVIDER,
   defaultInstanceIdForDriver,
   EnvironmentId,
@@ -82,7 +84,7 @@ const isSnapShotSource = Schema.is(SnapShotSource);
 const isPreviewAnnotationPayload = Schema.is(PreviewAnnotationPayloadSchema);
 
 export const COMPOSER_DRAFT_STORAGE_KEY = "t3code:composer-drafts:v1";
-const COMPOSER_DRAFT_STORAGE_VERSION = 9;
+const COMPOSER_DRAFT_STORAGE_VERSION = 10;
 const DraftThreadEnvModeSchema = Schema.Literals(["local", "worktree"]);
 export type DraftThreadEnvMode = typeof DraftThreadEnvModeSchema.Type;
 
@@ -252,6 +254,7 @@ const PersistedComposerThreadDraftState = Schema.Struct({
   modelSelectionExplicit: Schema.optionalKey(Schema.Boolean),
   runtimeMode: Schema.optionalKey(RuntimeMode),
   interactionMode: Schema.optionalKey(ProviderInteractionMode),
+  gentleAiFlow: Schema.optionalKey(GentleAiFlowId),
 });
 type PersistedComposerThreadDraftState = typeof PersistedComposerThreadDraftState.Type;
 
@@ -403,6 +406,11 @@ export interface ComposerThreadDraftState {
   modelSelectionExplicit?: boolean;
   runtimeMode: RuntimeMode | null;
   interactionMode: ProviderInteractionMode | null;
+  /**
+   * Gentle AI flow the composer is in (`null` is Organic). A mode choice like
+   * `interactionMode`: it persists per thread but is not user content.
+   */
+  gentleAiFlow: GentleAiFlowId | null;
 }
 
 /**
@@ -613,6 +621,10 @@ interface ComposerDraftStoreState {
     threadRef: ComposerThreadTarget,
     interactionMode: ProviderInteractionMode | null | undefined,
   ) => void;
+  setGentleAiFlow: (
+    threadRef: ComposerThreadTarget,
+    gentleAiFlow: GentleAiFlowId | null | undefined,
+  ) => void;
   addImage: (threadRef: ComposerThreadTarget, image: ComposerImageAttachment) => boolean;
   /** Returns the ids the draft accepted; duplicates and over-cap attachments are left out. */
   addImages: (
@@ -789,6 +801,7 @@ const EMPTY_THREAD_DRAFT = Object.freeze<ComposerThreadDraftState>({
   activeProvider: null,
   runtimeMode: null,
   interactionMode: null,
+  gentleAiFlow: null,
 });
 
 /**
@@ -811,6 +824,7 @@ function createEmptyThreadDraft(): ComposerThreadDraftState {
     activeProvider: null,
     runtimeMode: null,
     interactionMode: null,
+    gentleAiFlow: null,
   };
 }
 
@@ -904,8 +918,18 @@ function shouldRemoveDraft(draft: ComposerThreadDraftState): boolean {
     Object.keys(draft.modelSelectionByProvider).length === 0 &&
     draft.activeProvider === null &&
     draft.runtimeMode === null &&
-    draft.interactionMode === null
+    draft.interactionMode === null &&
+    draft.gentleAiFlow === null
   );
+}
+
+/** Organic is stored as `null`; an id from a newer catalog is dropped rather than kept as an unknown flow. */
+function normalizeGentleAiFlow(value: unknown): GentleAiFlowId | null {
+  return typeof value === "string" &&
+    value !== "organic" &&
+    GENTLE_AI_FLOW_BY_ID.has(value as GentleAiFlowId)
+    ? (value as GentleAiFlowId)
+    : null;
 }
 
 function normalizeProviderDriverKind(value: unknown): ProviderDriverKind | null {
@@ -1904,6 +1928,7 @@ function normalizePersistedDraftsByThreadId(
       draftCandidate.interactionMode === "plan" || draftCandidate.interactionMode === "default"
         ? draftCandidate.interactionMode
         : null;
+    const gentleAiFlow = normalizeGentleAiFlow(draftCandidate.gentleAiFlow);
     const contextIds = new Map<string, string>();
     for (const [kind, entries] of [
       ["image", attachments],
@@ -1999,7 +2024,8 @@ function normalizePersistedDraftsByThreadId(
       previewAnnotations.length === 0 &&
       !hasModelData &&
       !runtimeMode &&
-      !interactionMode
+      !interactionMode &&
+      !gentleAiFlow
     ) {
       continue;
     }
@@ -2032,6 +2058,7 @@ function normalizePersistedDraftsByThreadId(
         : {}),
       ...(runtimeMode ? { runtimeMode } : {}),
       ...(interactionMode ? { interactionMode } : {}),
+      ...(gentleAiFlow ? { gentleAiFlow } : {}),
     };
   }
 
@@ -2069,7 +2096,9 @@ function stripLegacyModelSeedsFromEmptyDraftSessions(
         modelSelectionExplicit: _modelSelectionExplicit,
         ...retained
       } = draft;
-      return retained.runtimeMode || retained.interactionMode ? [[threadKey, retained]] : [];
+      return retained.runtimeMode || retained.interactionMode || retained.gentleAiFlow
+        ? [[threadKey, retained]]
+        : [];
     }),
   );
 }
@@ -2132,7 +2161,8 @@ export function partializeComposerDraftStoreState(
       draft.reviewComments.length === 0 &&
       !hasModelData &&
       draft.runtimeMode === null &&
-      draft.interactionMode === null
+      draft.interactionMode === null &&
+      draft.gentleAiFlow === null
     ) {
       continue;
     }
@@ -2196,6 +2226,7 @@ export function partializeComposerDraftStoreState(
         : {}),
       ...(draft.runtimeMode ? { runtimeMode: draft.runtimeMode } : {}),
       ...(draft.interactionMode ? { interactionMode: draft.interactionMode } : {}),
+      ...(draft.gentleAiFlow ? { gentleAiFlow: draft.gentleAiFlow } : {}),
     };
     persistedDraftsByThreadKey[threadKey] = persistedDraft;
   }
@@ -2462,6 +2493,7 @@ function toHydratedThreadDraft(
     ...(persistedDraft.modelSelectionExplicit ? { modelSelectionExplicit: true } : {}),
     runtimeMode: persistedDraft.runtimeMode ?? null,
     interactionMode: persistedDraft.interactionMode ?? null,
+    gentleAiFlow: normalizeGentleAiFlow(persistedDraft.gentleAiFlow),
   };
 }
 
@@ -3277,6 +3309,34 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             const nextDraft: ComposerThreadDraftState = {
               ...base,
               interactionMode: nextInteractionMode,
+            };
+            const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+            if (shouldRemoveDraft(nextDraft)) {
+              delete nextDraftsByThreadKey[threadKey];
+            } else {
+              nextDraftsByThreadKey[threadKey] = nextDraft;
+            }
+            return { draftsByThreadKey: nextDraftsByThreadKey };
+          });
+        },
+        setGentleAiFlow: (threadRef, gentleAiFlow) => {
+          const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+          if (threadKey.length === 0) {
+            return;
+          }
+          const nextGentleAiFlow = normalizeGentleAiFlow(gentleAiFlow);
+          set((state) => {
+            const existing = state.draftsByThreadKey[threadKey];
+            if (!existing && nextGentleAiFlow === null) {
+              return state;
+            }
+            const base = existing ?? createEmptyThreadDraft();
+            if (base.gentleAiFlow === nextGentleAiFlow) {
+              return state;
+            }
+            const nextDraft: ComposerThreadDraftState = {
+              ...base,
+              gentleAiFlow: nextGentleAiFlow,
             };
             const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
             if (shouldRemoveDraft(nextDraft)) {

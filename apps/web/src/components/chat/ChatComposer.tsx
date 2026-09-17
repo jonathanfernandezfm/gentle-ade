@@ -21,6 +21,7 @@ import type {
   AssistantCitation,
   ChatFileAttachment,
   EnvironmentId,
+  GentleAiFlowId,
   ModelSelection,
   ProjectId,
   PullRequestListInput,
@@ -247,6 +248,9 @@ import { ProviderModelPicker } from "./ProviderModelPicker";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
+import { GentleFlowPicker } from "./GentleFlowPicker";
+import { buildGentleFlowOptionGroups, gentleFlowPlaceholder } from "./gentleFlow.logic";
+import { useGentleAiStatus } from "../../state/gentleAi";
 import { ComposerImageThumbnail } from "./ComposerImageThumbnail";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
@@ -1271,6 +1275,11 @@ export interface ChatComposerHandle {
     selectedProviderModels: ReadonlyArray<ServerProvider["models"][number]>;
     interactionMode: ProviderInteractionMode;
     interactionModeEnabled: boolean;
+    /** Names the selected provider reports for this checkout; drives the Gentle AI flow invocation. */
+    gentleAiFlowAvailability: {
+      slashCommands: ReadonlySet<string>;
+      skills: ReadonlySet<string>;
+    };
   };
   /** Validate the fully composed text immediately before a provider turn starts. */
   validateProviderInput: (providerInput: string) => boolean;
@@ -1350,6 +1359,8 @@ export interface ChatComposerProps {
   // Mode
   runtimeMode: RuntimeMode;
   interactionMode: ProviderInteractionMode;
+  /** Selected Gentle AI flow for this thread's draft; `null` is Organic. */
+  gentleAiFlow: GentleAiFlowId | null;
 
   // Provider / model
   lockedProvider: ProviderDriverKind | null;
@@ -1424,6 +1435,7 @@ export interface ChatComposerProps {
   toggleInteractionMode: () => void;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
   handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
+  onGentleAiFlowChange: (flow: GentleAiFlowId | null) => void;
 
   focusComposer: () => void;
   scheduleComposerFocus: () => void;
@@ -1475,6 +1487,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeProposedPlan,
     runtimeMode,
     interactionMode: requestedInteractionMode,
+    gentleAiFlow,
     lockedProvider,
     providerStatuses,
     providerCatalogKnown,
@@ -1523,6 +1536,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     toggleInteractionMode,
     handleRuntimeModeChange,
     handleInteractionModeChange,
+    onGentleAiFlowChange,
     focusComposer,
     scheduleComposerFocus,
     setThreadError,
@@ -1896,6 +1910,36 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const selectedProviderSlashCommands = selectedProviderStatus
     ? resolveProviderSlashCommandsForCwd(selectedProviderStatus, gitCwd)
     : [];
+  // Name sets for the Gentle AI flow routing, keyed off the snapshot so the
+  // picker options and the send-time invocation agree on what is installed.
+  const gentleAiFlowAvailability = useMemo(
+    () => ({
+      slashCommands: new Set(
+        (selectedProviderStatus
+          ? resolveProviderSlashCommandsForCwd(selectedProviderStatus, gitCwd)
+          : []
+        ).map((command) => command.name),
+      ),
+      skills: new Set(
+        (selectedProviderStatus ? resolveProviderSkillsForCwd(selectedProviderStatus, gitCwd) : [])
+          .filter((skill) => skill.enabled)
+          .map((skill) => skill.name),
+      ),
+    }),
+    [gitCwd, selectedProviderStatus],
+  );
+  const gentleFlowGroups = useMemo(
+    () =>
+      buildGentleFlowOptionGroups({
+        provider: selectedProvider,
+        availableSlashCommands: gentleAiFlowAvailability.slashCommands,
+        availableSkills: gentleAiFlowAvailability.skills,
+      }),
+    [gentleAiFlowAvailability, selectedProvider],
+  );
+  // The picker stays visible until the primary environment positively reports
+  // no gentle-ai binary; an unknown status must not flash the control away.
+  const gentleAiFlowPickerVisible = useGentleAiStatus().data?.binary.installed !== false;
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -1968,10 +2012,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         promptInjectionState: composerPromptInjectionState,
         modelOptions: composerModelOptions?.[selectedInstanceId],
         planModeEnabled: settings.planModeEnabled,
+        gentleAiFlow,
       }),
     [
       composerModelOptions,
       composerPromptInjectionState,
+      gentleAiFlow,
       selectedInstanceId,
       selectedModel,
       selectedProvider,
@@ -2178,12 +2224,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         imageCount: composerImages.length + composerFiles.length,
         terminalContexts: composerTerminalContexts,
         elementContextCount: composerPreviewAnnotations.length + composerReviewComments.length,
+        gentleAiFlow,
       }),
     [
       composerFiles.length,
       composerImages.length,
       composerPreviewAnnotations.length,
       composerReviewComments.length,
+      gentleAiFlow,
       composerTerminalContexts,
       prompt,
     ],
@@ -4846,10 +4894,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const restingHiddenBlockCount = composerControlsInStrip ? restingControlsHiddenBlockCount : 0;
   const composerControlsCompact = !composerControlsInStrip && isComposerFooterCompact;
+  // Blocks hide from the end of the strip first; the flow picker sits last, so
+  // each earlier block's threshold shifts by one while the picker is present.
+  const trailingRestingBlockCount = gentleAiFlowPickerVisible ? 1 : 0;
   const restingProviderTraitsPicker = renderProviderTraitsPicker({
     ...providerTraitsPickerInput,
     size: "xs",
-    hidden: composerControlsHidden || restingHiddenBlockCount > 1,
+    hidden: composerControlsHidden || restingHiddenBlockCount > 1 + trailingRestingBlockCount,
   });
   const restingBlockDefs = [
     ...(providerTraitsPicker
@@ -4873,13 +4924,35 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           interactionMode={interactionMode}
           runtimeMode={runtimeMode}
           size={composerControlsInStrip ? "xs" : "sm"}
-          hidden={composerControlsHidden || restingHiddenBlockCount > 0}
+          hidden={composerControlsHidden || restingHiddenBlockCount > trailingRestingBlockCount}
           onToggleInteractionMode={toggleInteractionMode}
           onRuntimeModeChange={handleRuntimeModeChange}
         />
       ),
     },
+    ...(gentleAiFlowPickerVisible
+      ? [
+          {
+            id: "flow",
+            content: (
+              <>
+                <ComposerControlSeparator size={composerControlsInStrip ? "xs" : "sm"} />
+                <GentleFlowPicker
+                  flow={gentleAiFlow}
+                  groups={gentleFlowGroups}
+                  size={composerControlsInStrip ? "xs" : "sm"}
+                  hidden={composerControlsHidden || restingHiddenBlockCount > 0}
+                  onFlowChange={onGentleAiFlowChange}
+                />
+              </>
+            ),
+          },
+        ]
+      : []),
   ];
+  const compactGentleFlow = gentleAiFlowPickerVisible
+    ? { flow: gentleAiFlow, groups: gentleFlowGroups, onFlowChange: onGentleAiFlowChange }
+    : undefined;
   const hiddenRestingBlockIds = restingBlockDefs
     .slice(restingBlockDefs.length - restingHiddenBlockCount)
     .map((def) => def.id);
@@ -4961,6 +5034,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           runtimeMode={runtimeMode}
           showInteractionModeToggle={planModeUiEnabled}
           traitsMenuContent={providerTraitsMenuContent}
+          {...(compactGentleFlow ? { gentleFlow: compactGentleFlow } : {})}
           onToggleInteractionMode={toggleInteractionMode}
           onRuntimeModeChange={handleRuntimeModeChange}
         />
@@ -5007,6 +5081,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 traitsMenuContent={
                   hiddenRestingBlockIds.includes("traits") ? providerTraitsMenuContent : undefined
                 }
+                {...(compactGentleFlow && hiddenRestingBlockIds.includes("flow")
+                  ? { gentleFlow: compactGentleFlow }
+                  : {})}
                 onToggleInteractionMode={toggleInteractionMode}
                 onRuntimeModeChange={handleRuntimeModeChange}
               />
@@ -5876,6 +5953,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         selectedProviderModels,
         interactionMode,
         interactionModeEnabled: planModeUiEnabled,
+        gentleAiFlowAvailability,
       }),
       validateProviderInput: (providerInput: string) => {
         const validationMessage = getComposerSubmissionValidationMessage({
@@ -5926,6 +6004,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       selectedProviderModels,
       interactionMode,
       planModeUiEnabled,
+      gentleAiFlowAvailability,
       compactThreadContext,
       restoreAfterTimelineReachedEnd,
       getTimelineScrollableNode,
@@ -6200,6 +6279,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           <div
             ref={composerSurfaceRef}
             data-chat-composer-surface="true"
+            data-chat-composer-gentle-flow={gentleAiFlow ?? undefined}
             data-chat-composer-mobile-collapsed={isComposerCollapsedMobile ? "true" : "false"}
             className={cn(
               "rounded-[20px] transition-[background-color] duration-200",
@@ -6741,7 +6821,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                                 ? "Enable a provider in Settings to send a message"
                                 : phase === "disconnected"
                                   ? DISCONNECTED_COMPOSER_PLACEHOLDER
-                                  : "Ask anything, @tag files/folders, $use skills, or / for commands"
+                                  : (gentleFlowPlaceholder(gentleAiFlow) ??
+                                    "Ask anything, @tag files/folders, $use skills, or / for commands")
                     }
                     disabled={
                       isConnecting ||

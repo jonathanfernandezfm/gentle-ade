@@ -7,6 +7,7 @@ import type {
   ComposerContextRecord,
   EnvironmentId,
   FileContextRecord,
+  GentleAiFlowId,
   ImageContextRecord,
   KnownComposerContextRecord,
   MessageId,
@@ -296,6 +297,8 @@ export function buildMessageContext(input: {
   reviewComments: ReadonlyArray<ReviewCommentContext>;
   previewAnnotations: ReadonlyArray<PreviewAnnotationPayload>;
   attachments?: ReadonlyArray<BoundComposerAttachment>;
+  /** Flow the composer was in; organic (`null`) adds nothing to the envelope. */
+  gentleAiFlow?: GentleAiFlowId | null;
 }): OrchestrationMessageContext | undefined {
   // An annotation's screenshot travels as the image attachment that reuses its id.
   const screenshotAttachmentIds = new Set(
@@ -313,7 +316,9 @@ export function buildMessageContext(input: {
     ),
     ...(input.attachments ?? []).map(attachmentContextRecord),
   ];
-  return records.length === 0 ? undefined : { version: 1, records };
+  const gentleAiFlow = input.gentleAiFlow ?? null;
+  if (records.length === 0 && gentleAiFlow === null) return undefined;
+  return { version: 1, records, ...(gentleAiFlow === null ? {} : { gentleAiFlow }) };
 }
 
 /**

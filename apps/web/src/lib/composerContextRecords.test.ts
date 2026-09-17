@@ -141,6 +141,15 @@ describe("composerContextRecords", () => {
     expect(context.records.map((record) => record.kind)).toEqual(["preview-annotation", "file"]);
     expect(context.records[0]).not.toHaveProperty("screenshotContextId");
   });
+
+  it("carries the Gentle AI flow without records and omits it for organic sends", () => {
+    const empty = { terminalContexts: [], reviewComments: [], previewAnnotations: [] };
+    expect(buildMessageContext(empty)).toBeUndefined();
+    expect(buildMessageContext({ ...empty, gentleAiFlow: null })).toBeUndefined();
+    const context = buildMessageContext({ ...empty, gentleAiFlow: "sdd-new" })!;
+    expect(context).toEqual({ version: 1, records: [], gentleAiFlow: "sdd-new" });
+    expect(decodeMessageContext(context)).toEqual(context);
+  });
   it.each(["x", "terminal_x"])(
     "preserves canonical terminal IDs across repeated imports: %s",
     (id) => {

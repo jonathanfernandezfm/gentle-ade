@@ -2071,6 +2071,73 @@ code {
   filter: saturate(1.2);
 }
 
+/* Gentle AI flow accent: the same masked-border technique as `.ultrathink-frame`,
+   but static and single-hued. `--gentle-flow-accent` comes from the group
+   modifier; the trigger and the inner surface highlight read the same variable. */
+.gentle-flow-frame {
+  --gentle-flow-accent: #f095c8;
+  position: relative;
+  box-shadow: 0 6px 22px -8px color-mix(in srgb, var(--gentle-flow-accent) 12%, transparent);
+
+  @variant dark {
+    box-shadow: 0 8px 26px -8px color-mix(in srgb, var(--gentle-flow-accent) 14%, transparent);
+  }
+}
+
+.gentle-flow-frame--sdd {
+  --gentle-flow-accent: #f095c8;
+}
+
+.gentle-flow-frame--review {
+  --gentle-flow-accent: #f5b94a;
+}
+
+.gentle-flow-frame--workflow {
+  --gentle-flow-accent: #5ed4c3;
+}
+
+.gentle-flow-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background-image: linear-gradient(
+    135deg,
+    var(--gentle-flow-accent) 0%,
+    color-mix(in srgb, var(--gentle-flow-accent) 62%, transparent) 55%,
+    var(--gentle-flow-accent) 100%
+  );
+  pointer-events: none;
+  opacity: 0.85;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+
+  @variant dark {
+    opacity: 0.7;
+  }
+}
+
+.gentle-flow-frame > * {
+  position: relative;
+}
+
+/* Subtle top highlight inside the surface; lighter in light mode where the
+   border already carries enough contrast. */
+.gentle-flow-surface {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--gentle-flow-accent) 14%, transparent);
+
+  @variant dark {
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--gentle-flow-accent) 22%, transparent);
+  }
+}
+
 @keyframes preview-loading-progress {
   from {
     transform: scaleX(0.04);

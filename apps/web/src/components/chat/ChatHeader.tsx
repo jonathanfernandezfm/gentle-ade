@@ -1,6 +1,7 @@
 import {
   type EnvironmentId,
   type EditorId,
+  type GentleAiSddStatus,
   type ProjectScript,
   type ResolvedKeybindingsConfig,
   type ThreadId,
@@ -31,6 +32,7 @@ import ProjectScriptsControl, {
   type NewProjectScriptInput,
   type ProjectScriptActionResult,
 } from "../ProjectScriptsControl";
+import { GentleSddChip } from "./GentleSddChip";
 import { OpenInPicker } from "./OpenInPicker";
 import { useRemoteOpenState, type RemoteOpenMode } from "../../remoteOpen";
 import { usePrimaryEnvironmentId } from "../../state/environments";
@@ -63,6 +65,8 @@ interface ChatHeaderProps {
   availableEditors: ReadonlyArray<EditorId>;
   rightPanelOpen: boolean;
   gitCwd: string | null;
+  /** Active SDD change for the thread's project, when Gentle AI reports one. */
+  gentleSddStatus?: GentleAiSddStatus | null;
   readonly onOpenPullRequest?: ((number: number) => void) | undefined;
   onNewThreadInProject: () => void;
   onOpenProjectSettings?: (() => void) | undefined;
@@ -132,6 +136,7 @@ export const ChatHeader = memo(function ChatHeader({
   availableEditors,
   rightPanelOpen,
   gitCwd,
+  gentleSddStatus = null,
   onOpenPullRequest,
   onNewThreadInProject,
   onOpenProjectSettings,
@@ -409,6 +414,7 @@ export const ChatHeader = memo(function ChatHeader({
           "[[data-panel-animations=true]_&]:motion-safe:transition-[padding-right] [[data-panel-animations=true]_&]:motion-safe:[transition-duration:var(--panel-animation-duration)] [[data-panel-animations=true]_&]:motion-safe:ease-out",
         )}
       >
+        <GentleSddChip sddStatus={gentleSddStatus} />
         {activeProjectScripts && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}

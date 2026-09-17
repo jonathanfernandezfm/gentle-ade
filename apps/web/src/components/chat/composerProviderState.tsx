@@ -1,4 +1,5 @@
 import {
+  type GentleAiFlowId,
   type ModelCapabilities,
   type ProviderDriverKind,
   type ProviderInstanceId,
@@ -20,6 +21,7 @@ import type { buttonVariants } from "../ui/button";
 import type { DraftId } from "../../composerDraftStore";
 import { getProviderModelCapabilities } from "../../providerModels";
 import type { ComposerControlSize } from "./ComposerControl";
+import { gentleFlowFrameClassName } from "./gentleFlow.logic";
 import { shouldRenderTraitsControls, TraitsMenuContent, TraitsPicker } from "./TraitsPicker";
 
 export type ComposerProviderStateInput = {
@@ -29,6 +31,8 @@ export type ComposerProviderStateInput = {
   promptInjectionState?: ComposerPromptInjectionState;
   modelOptions: ReadonlyArray<ProviderOptionSelection> | null | undefined;
   planModeEnabled: boolean;
+  /** Selected Gentle AI flow; `null`/absent is Organic and leaves the frame untinted. */
+  gentleAiFlow?: GentleAiFlowId | null;
 };
 
 export type ComposerPromptInjectionState = "none" | "ultrathink";
@@ -102,6 +106,19 @@ function resolveComposerOptionSelections(
   return { caps, selections: withImplicitFastModeDefault(caps, modelOptions) };
 }
 
+/**
+ * Frame classes for a selected flow. Ultrathink keeps priority when both apply:
+ * it is a per-prompt signal the user typed, the flow is a standing mode.
+ */
+function gentleFlowFrame(
+  gentleAiFlow: GentleAiFlowId | null | undefined,
+): Pick<ComposerProviderState, "composerFrameClassName" | "composerSurfaceClassName"> {
+  const composerFrameClassName = gentleFlowFrameClassName(gentleAiFlow ?? null);
+  return composerFrameClassName
+    ? { composerFrameClassName, composerSurfaceClassName: "gentle-flow-surface" }
+    : {};
+}
+
 export function getComposerProviderState(input: ComposerProviderStateInput): ComposerProviderState {
   const {
     provider,
@@ -110,6 +127,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
     modelOptions,
     promptInjectionState = "none",
     planModeEnabled,
+    gentleAiFlow = null,
   } = input;
   if (provider === "opencode") {
     const normalizedModel = normalizeModelSlug(model, provider);
@@ -123,6 +141,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
         promptEffort: null,
         modelOptionsForDispatch:
           preservedOptions && preservedOptions.length > 0 ? preservedOptions : undefined,
+        ...gentleFlowFrame(gentleAiFlow),
       };
     }
   }
@@ -157,7 +176,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
           composerSurfaceClassName: "shadow-[0_0_0_1px_rgba(255,255,255,0.07)_inset]",
           modelPickerIconClassName: "ultrathink-chroma",
         }
-      : {}),
+      : gentleFlowFrame(gentleAiFlow)),
   };
 }
 
