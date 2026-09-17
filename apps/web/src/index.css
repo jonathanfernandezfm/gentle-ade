@@ -2076,11 +2076,17 @@ code {
    modifier; the trigger and the inner surface highlight read the same variable. */
 .gentle-flow-frame {
   --gentle-flow-accent: #f095c8;
-  position: relative;
-  box-shadow: 0 6px 22px -8px color-mix(in srgb, var(--gentle-flow-accent) 12%, transparent);
+  /* One uniform ring plus a soft glow. A ring drawn with box-shadow follows the
+     rounded corners exactly, unlike a masked pseudo-element whose padding
+     reads thinner on the bottom edge at fractional device pixels. */
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--gentle-flow-accent) 85%, transparent),
+    0 0 22px -4px color-mix(in srgb, var(--gentle-flow-accent) 18%, transparent);
 
   @variant dark {
-    box-shadow: 0 8px 26px -8px color-mix(in srgb, var(--gentle-flow-accent) 14%, transparent);
+    box-shadow:
+      0 0 0 1.5px color-mix(in srgb, var(--gentle-flow-accent) 70%, transparent),
+      0 0 26px -4px color-mix(in srgb, var(--gentle-flow-accent) 22%, transparent);
   }
 }
 
@@ -2094,38 +2100,6 @@ code {
 
 .gentle-flow-frame--workflow {
   --gentle-flow-accent: #5ed4c3;
-}
-
-.gentle-flow-frame::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1.5px;
-  background-image: linear-gradient(
-    135deg,
-    var(--gentle-flow-accent) 0%,
-    color-mix(in srgb, var(--gentle-flow-accent) 62%, transparent) 55%,
-    var(--gentle-flow-accent) 100%
-  );
-  pointer-events: none;
-  opacity: 0.85;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-
-  @variant dark {
-    opacity: 0.7;
-  }
-}
-
-.gentle-flow-frame > * {
-  position: relative;
 }
 
 /* Subtle top highlight inside the surface; lighter in light mode where the

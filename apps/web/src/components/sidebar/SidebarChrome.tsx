@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon, SparklesIcon } from "lucide-react";
+import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useCanGoBack, useLocation, useNavigate } from "@tanstack/react-router";
@@ -108,17 +108,24 @@ function SidebarUtilityItem({
   icon,
   label,
   onClick,
+  className,
 }: {
   icon: ReactNode;
   label: string;
   onClick: () => void;
+  className?: string;
 }) {
   return (
     <SidebarMenuItem className="shrink-0">
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuButton aria-label={label} onClick={onClick} size="icon">
+            <SidebarMenuButton
+              aria-label={label}
+              onClick={onClick}
+              size="icon"
+              className={className}
+            >
               {icon}
             </SidebarMenuButton>
           }
@@ -215,11 +222,13 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             />
           ) : null}
           <SidebarUtilityItem
-            // Rose-tinted so the Gentle AI entry reads as this fork's own
-            // surface next to the inherited utility actions.
-            icon={<SparklesIcon className="text-[#f095c8]" />}
+            // The rose mark in brand pink with a matching hover tint, so the
+            // Gentle AI entry reads as this fork's own surface next to the
+            // inherited utility actions.
+            icon={<GentleWordmark aria-hidden className="size-4 shrink-0" accentColor="#ffd3e8" />}
             label="Gentle AI"
             onClick={handleGentleAiClick}
+            className="text-[#f095c8] hover:bg-[#f095c8]/12 hover:text-[#f7b8db]"
           />
           <SidebarUtilityItem
             icon={<ChartNoAxesColumnIcon />}
