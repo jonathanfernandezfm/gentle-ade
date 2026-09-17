@@ -3624,3 +3624,156 @@ describe("computeStableMessagesTimelineRows", () => {
     expect(reordered.result).toEqual([initial.result[1], initial.result[0]]);
   });
 });
+
+describe("gentle flow mark rows", () => {
+  const turnId = TurnId.make("flow-turn");
+  const time = (second: number) => new Date(Date.UTC(2026, 8, 4, 0, 0, second)).toISOString();
+  const flowUser: ChatMessage = {
+    id: MessageId.make("flow-user"),
+    role: "user",
+    text: "auth refactor",
+    turnId: null,
+    createdAt: time(0),
+    updatedAt: time(0),
+    streaming: false,
+    context: { version: 1, records: [], gentleAiFlow: "sdd-new" },
+  };
+  const assistant: ChatMessage = {
+    id: MessageId.make("flow-assistant"),
+    role: "assistant",
+    text: "Proposal written.",
+    turnId,
+    createdAt: time(20),
+    updatedAt: time(21),
+    streaming: false,
+  };
+  const workEntry = (id: string, second: number): WorkLogEntry => ({
+    id,
+    turnId,
+    createdAt: time(second),
+    label: "Read file",
+    tone: "tool",
+    toolCallId: id,
+    toolLifecycleStatus: "completed",
+    sourceActivityKind: "tool.completed",
+  });
+  const settledTurn = {
+    turnId,
+    state: "completed",
+    startedAt: time(1),
+    completedAt: time(22),
+  } as const;
+
+  it("frames a settled flow turn with start and end dividers", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: deriveTimelineEntries([flowUser, assistant], [], [workEntry("w1", 5)]),
+      latestTurn: settledTurn,
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaries: [],
+      supportsConversationRollback: false,
+    });
+    expect(rows.map((row) => row.kind)).toEqual([
+      "gentle-flow-start",
+      "message",
+      "turn-fold",
+      "message",
+      "gentle-flow-end",
+    ]);
+    expect(rows[0]).toMatchObject({ id: "gentle-flow-start:flow-user", label: "SDD · New change" });
+    expect(rows.at(-1)).toMatchObject({
+      id: "gentle-flow-end:flow-user",
+      durationMs: 21_000,
+      outcome: "completed",
+    });
+  });
+
+  it("keeps both dividers visible around a folded turn and moves the end below expanded work", () => {
+    const timelineEntries = deriveTimelineEntries(
+      [flowUser, assistant],
+      [],
+      [workEntry("w1", 5), workEntry("w2", 6)],
+    );
+    const base = {
+      timelineEntries,
+      latestTurn: settledTurn,
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaries: [],
+      supportsConversationRollback: false,
+    } as const;
+    const folded = deriveMessagesTimelineRows(base);
+    expect(folded.map((row) => row.kind)).toEqual([
+      "gentle-flow-start",
+      "message",
+      "turn-fold",
+      "message",
+      "gentle-flow-end",
+    ]);
+    const expanded = deriveMessagesTimelineRows({ ...base, expandedTurnIds: new Set([turnId]) });
+    expect(expanded.map((row) => row.kind)).toEqual([
+      "gentle-flow-start",
+      "message",
+      "turn-fold",
+      "work-toggle",
+      "message",
+      "gentle-flow-end",
+    ]);
+  });
+
+  it("shows only the start divider while the flow's turn is live", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: deriveTimelineEntries([flowUser], [], [workEntry("w1", 5)]),
+      latestTurn: { turnId, state: "running", startedAt: time(1), completedAt: null },
+      runningTurnId: turnId,
+      isWorking: true,
+      activeTurnStartedAt: time(1),
+      turnDiffSummaries: [],
+      supportsConversationRollback: false,
+    });
+    expect(rows[0]?.kind).toBe("gentle-flow-start");
+    expect(rows.some((row) => row.kind === "gentle-flow-end")).toBe(false);
+  });
+
+  it("places the end divider after the assistant footer that trails tool groups", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: deriveTimelineEntries(
+        [flowUser, assistant],
+        [],
+        [workEntry("w1", 5), workEntry("trailing-a", 23), workEntry("trailing-b", 24)],
+      ),
+      latestTurn: settledTurn,
+      expandedTurnIds: new Set([turnId]),
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaries: [],
+      supportsConversationRollback: false,
+    });
+    const kinds = rows.map((row) => row.kind);
+    expect(kinds.at(-1)).toBe("gentle-flow-end");
+    expect(kinds.at(-2)).toBe("assistant-meta");
+  });
+
+  it("reuses divider rows across projections when nothing about them changed", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: deriveTimelineEntries([flowUser, assistant], [], []),
+      latestTurn: settledTurn,
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaries: [],
+      supportsConversationRollback: false,
+    });
+    const initial = computeStableMessagesTimelineRows(rows, { byId: new Map(), result: [] });
+    const next = computeStableMessagesTimelineRows(
+      rows.map((row) => ({ ...row })),
+      initial,
+    );
+    expect(next).toBe(initial);
+    expect(rows.map((row) => row.kind)).toEqual([
+      "gentle-flow-start",
+      "message",
+      "message",
+      "gentle-flow-end",
+    ]);
+  });
+});

@@ -120,6 +120,7 @@ import {
   PaintbrushIcon,
   SearchIcon,
   SmartphoneIcon,
+  SparklesIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -130,6 +131,7 @@ import {
 import type {
   ComposerContextId,
   ComposerContextRecord,
+  GentleAiFlowGroup,
   KnownComposerContextRecord,
 } from "@t3tools/contracts";
 import { Button } from "../ui/button";
@@ -243,7 +245,11 @@ import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
 
 import { SkillInlineText } from "./SkillInlineText";
-import { deriveAgentSpawnSummary } from "./agentSpawnSummary";
+import {
+  deriveAgentSpawnSummary,
+  gentleAgentRoleGroup,
+  isGentleAgentRole,
+} from "./agentSpawnSummary";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import {
   buildReviewCommentRenderablePatch,
@@ -1522,6 +1528,8 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "work-toggle" ? <WorkGroupToggleTimelineRow row={row} /> : null}
       {row.kind === "turn-fold" ? <TurnFoldTimelineRow row={row} /> : null}
       {row.kind === "context-compaction" ? <ContextCompactionTimelineRow row={row} /> : null}
+      {row.kind === "gentle-flow-start" ? <GentleFlowStartTimelineRow row={row} /> : null}
+      {row.kind === "gentle-flow-end" ? <GentleFlowEndTimelineRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "user" ? <UserTimelineRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "assistant" ? (
         <AssistantTimelineRow row={row} />
@@ -1684,6 +1692,88 @@ function ContextCompactionTimelineRow({
       </span>
       <span className="h-px flex-1 bg-border/70" />
     </div>
+  );
+}
+
+/** Composer accent per Gentle AI flow group; Organic is untinted and never marked. */
+const GENTLE_FLOW_GROUP_ACCENT: Record<GentleAiFlowGroup, string | null> = {
+  organic: null,
+  sdd: "#F095C8",
+  review: "#F5B94A",
+  workflow: "#5ED4C3",
+};
+
+const gentleFlowSeparatorClassName =
+  "mx-auto flex w-full max-w-3xl items-center gap-3 py-1 text-muted-foreground text-xs";
+
+function GentleFlowStartTimelineRow({
+  row,
+}: {
+  row: Extract<TimelineRow, { kind: "gentle-flow-start" }>;
+}) {
+  const ctx = use(TimelineRowCtx);
+  const accent = GENTLE_FLOW_GROUP_ACCENT[row.group];
+  const time = formatDayAwareTimestamp(row.createdAt, ctx.timestampFormat);
+  return (
+    <div
+      role="separator"
+      aria-label={`${row.label} started, ${time}`}
+      className={gentleFlowSeparatorClassName}
+      data-gentle-flow={row.flowId}
+    >
+      <span className="h-px flex-1 bg-border/70" />
+      <span className="flex shrink-0 items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className="size-1.5 rotate-45 rounded-[1px] bg-current"
+          style={accent ? { backgroundColor: accent } : undefined}
+        />
+        <span className="font-medium text-foreground/80">{row.label}</span>
+        <span>started</span>
+        <span className="tabular-nums">· {time}</span>
+      </span>
+      <span className="h-px flex-1 bg-border/70" />
+    </div>
+  );
+}
+
+function GentleFlowEndTimelineRow({
+  row,
+}: {
+  row: Extract<TimelineRow, { kind: "gentle-flow-end" }>;
+}) {
+  const verb =
+    row.outcome === "completed" ? "finished" : row.outcome === "interrupted" ? "stopped" : "failed";
+  const duration = row.durationMs === null ? null : formatDuration(row.durationMs);
+  const Glyph = row.outcome === "completed" ? CheckIcon : XIcon;
+  return (
+    <div
+      role="separator"
+      aria-label={`${row.label} ${verb}${duration ? `, ${duration}` : ""}`}
+      className={gentleFlowSeparatorClassName}
+      data-gentle-flow={row.flowId}
+    >
+      <span className="h-px flex-1 bg-border/70" />
+      <span className="flex shrink-0 items-center gap-1.5">
+        <Glyph aria-hidden="true" className="size-3" />
+        <span className="font-medium text-foreground/80">{row.label}</span>
+        <span>{verb}</span>
+        {duration ? <span className="tabular-nums">· {duration}</span> : null}
+      </span>
+      <span className="h-px flex-1 bg-border/70" />
+    </div>
+  );
+}
+
+/** 10px pill marking a Gentle AI phase agent, tinted by its role family. */
+function GentleAgentTag({ group }: { group: "sdd" | "review" }) {
+  return (
+    <span
+      className="shrink-0 rounded-full px-1.5 text-[10px] font-medium leading-4 text-[#1c1917]"
+      style={{ backgroundColor: GENTLE_FLOW_GROUP_ACCENT[group] ?? undefined }}
+    >
+      Gentle
+    </span>
   );
 }
 
@@ -2910,6 +3000,8 @@ function toolGroupSummaryIconName(
       return "globe";
     case "code-search":
       return "search";
+    case "skill":
+      return "skill";
     case "other":
       return "wrench";
     case "dynamic-tool":
@@ -3790,6 +3882,7 @@ type WorkEntryIconName =
   | "hammer"
   | "message-circle"
   | "search"
+  | "skill"
   | "square-pen"
   | "terminal"
   | "pull-request"
@@ -4025,6 +4118,8 @@ function WorkEntryIcon({ name, className }: { name: WorkEntryIconName; className
       return <MessageCircleIcon className={className} aria-hidden />;
     case "search":
       return <SearchIcon className={className} aria-hidden />;
+    case "skill":
+      return <SparklesIcon className={className} aria-hidden />;
     case "square-pen":
       return <SquarePenIcon className={className} aria-hidden />;
     case "terminal":
@@ -4207,6 +4302,12 @@ const AgentSpawnRow = memo(function AgentSpawnRow(props: {
   const failed = summary.tone === "failed";
   const workflowName =
     workflowGroup?.workflow.workflowName ?? workflowGroup?.workflow.title ?? null;
+  // The roster may lag the spawn row; the row's own role covers that window.
+  const gentleGroup =
+    summary.gentle > 0
+      ? (gentleAgentRoleGroup(agents.find((agent) => isGentleAgentRole(agent.role))?.role) ?? "sdd")
+      : gentleAgentRoleGroup(workEntry.agentRole);
+  const leadLabel = workflowName ? `${lead} · ${workflowName}` : lead;
   const toggleExpanded = () => {
     props.onToggleEntry?.(expanded);
     onToggleSpawnRow(workEntry.id, !expanded);
@@ -4221,7 +4322,16 @@ const AgentSpawnRow = memo(function AgentSpawnRow(props: {
         className="flex cursor-pointer select-none rounded-md text-left transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
       >
         <LiveActivityRow
-          label={workflowName ? `${lead} · ${workflowName}` : lead}
+          label={
+            gentleGroup ? (
+              <span className="inline-flex items-center gap-1.5">
+                {leadLabel}
+                <GentleAgentTag group={gentleGroup} />
+              </span>
+            ) : (
+              leadLabel
+            )
+          }
           iconName="bot"
           active={live && props.active !== false}
           failed={failed}
@@ -4292,6 +4402,7 @@ function AgentSpawnMemberRow({
     agent.role && agent.role.trim().toLowerCase() !== agent.title.trim().toLowerCase()
       ? agent.role
       : null;
+  const memberGentleGroup = gentleAgentRoleGroup(agent.role);
   const firstLine = activity?.split("\n").find((line) => line.trim().length > 0) ?? null;
   const body = [activity?.trim() || null, formatSubagentModelLabel(agent.model, agent.effort)]
     .filter(Boolean)
@@ -4340,6 +4451,7 @@ function AgentSpawnMemberRow({
               {role}
             </span>
           ) : null}
+          {memberGentleGroup ? <GentleAgentTag group={memberGentleGroup} /> : null}
         </p>
         <span className="shrink-0 font-mono text-[.7rem] tabular-nums text-muted-foreground">
           {statusLabel}

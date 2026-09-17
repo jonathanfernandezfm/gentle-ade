@@ -3,6 +3,7 @@ import { shallow } from "zustand/vanilla/shallow";
 import { renderCodexDirectivesForCopy } from "@t3tools/client-runtime/codex-markdown-directives";
 import { commandProgramName } from "@t3tools/client-runtime/work-log/command-label";
 import {
+  gentleSkillDisplayLabel,
   liveActivityToolStatus,
   normalizeCompactToolLabel,
   omitSupersededLifecycleMarkers,
@@ -12,6 +13,12 @@ import {
   toolGroupSummaryKind,
   type ToolGroupSummaryKind,
 } from "@t3tools/client-runtime/work-log/presentation";
+import {
+  deriveGentleFlowMarks,
+  type GentleFlowEndMark,
+  type GentleFlowEndPlacement,
+  type GentleFlowStartMark,
+} from "./gentleFlowMarks";
 export {
   normalizeCompactToolLabel,
   toolGroupAction,
@@ -46,6 +53,8 @@ const TIMELINE_MINIMAP_PERSISTENT_GUTTER = 48;
 function singleToolCallLabel(entry: WorkLogEntry): string {
   const toolPresentation = resolveWorkEntryToolPresentation(entry, "completed");
   if (toolPresentation) return toolPresentation.displayName;
+  const skillLabel = gentleSkillDisplayLabel(entry);
+  if (skillLabel) return skillLabel;
   const command = entry.command?.trim();
   if (command) return command;
   const heading = normalizeCompactToolLabel(entry.toolTitle || entry.label);
@@ -55,6 +64,8 @@ function singleToolCallLabel(entry: WorkLogEntry): string {
 export function workEntryDisplayLabel(entry: WorkLogEntry, workspaceRoot: string | undefined) {
   const toolPresentation = resolveWorkEntryToolPresentation(entry);
   if (toolPresentation) return toolPresentation.displayName;
+  const skillLabel = gentleSkillDisplayLabel(entry);
+  if (skillLabel) return skillLabel;
   if (entry.command) return entry.command;
   if (entry.detail) return entry.detail;
   const [firstPath] = entry.changedFiles ?? [];
@@ -360,6 +371,8 @@ export type MessagesTimelineRow =
       createdAt: string;
       label: string;
     }
+  | GentleFlowStartMark
+  | GentleFlowEndMark
   | {
       kind: "message";
       id: string;
@@ -870,6 +883,66 @@ function attachTrailingToolGroupsToAssistant(
   return result;
 }
 
+function rowBelongsToTurns(row: MessagesTimelineRow, turnIds: ReadonlySet<TurnId>): boolean {
+  switch (row.kind) {
+    case "message":
+      return (
+        row.message.role !== "user" &&
+        row.message.turnId !== null &&
+        row.message.turnId !== undefined &&
+        turnIds.has(row.message.turnId)
+      );
+    case "assistant-meta":
+      return row.message.turnId !== null && turnIds.has(row.message.turnId);
+    case "work":
+      return row.groupedEntries.some(
+        (entry) => entry.turnId !== null && entry.turnId !== undefined && turnIds.has(entry.turnId),
+      );
+    case "work-live":
+      return (
+        row.entry.turnId !== null && row.entry.turnId !== undefined && turnIds.has(row.entry.turnId)
+      );
+    case "work-toggle":
+      return row.turnId !== null && row.turnId !== undefined && turnIds.has(row.turnId);
+    case "turn-fold":
+      return turnIds.has(row.turnId);
+    case "proposed-plan":
+      return row.proposedPlan.turnId !== null && turnIds.has(row.proposedPlan.turnId);
+    default:
+      return false;
+  }
+}
+
+/**
+ * A flow's end divider follows the last visible row of its turn(s): the
+ * assistant footer once trailing tools attach to it, or the "Worked for"
+ * fold when everything else is hidden. Hidden entries never anchor it, so a
+ * folded turn keeps both dividers on screen and the end mark moves below the
+ * work when the fold expands. A settled flow whose turn left no rows gets none.
+ */
+function insertGentleFlowEndRows(
+  rows: MessagesTimelineRow[],
+  ends: ReadonlyArray<GentleFlowEndPlacement>,
+): MessagesTimelineRow[] {
+  if (ends.length === 0) return rows;
+  const marksAfterIndex = new Map<number, GentleFlowEndMark[]>();
+  for (const { mark, turnIds } of ends) {
+    const index = rows.findLastIndex((row) => rowBelongsToTurns(row, turnIds));
+    if (index < 0) continue;
+    const marks = marksAfterIndex.get(index);
+    if (marks) marks.push(mark);
+    else marksAfterIndex.set(index, [mark]);
+  }
+  if (marksAfterIndex.size === 0) return rows;
+  const result: MessagesTimelineRow[] = [];
+  for (const [index, row] of rows.entries()) {
+    result.push(row);
+    const marks = marksAfterIndex.get(index);
+    if (marks) result.push(...marks);
+  }
+  return result;
+}
+
 /** Match each user message to the next assistant checkpoint. */
 function buildRevertTurnCountByUserMessageId(input: {
   supportsConversationRollback: boolean;
@@ -953,6 +1026,11 @@ export function deriveMessagesTimelineRows(input: {
     timelineEntries: input.timelineEntries,
     unsettledTurnId,
     isWorking: input.isWorking,
+  });
+  const gentleFlowMarks = deriveGentleFlowMarks({
+    timelineEntries: input.timelineEntries,
+    latestTurn: input.latestTurn ?? null,
+    unsettledTurnId,
   });
   const foldsByAnchorEntryId = deriveTurnFolds({
     timelineEntries: input.timelineEntries,
@@ -1295,6 +1373,14 @@ export function deriveMessagesTimelineRows(input: {
       terminalAssistantMessageIds.has(timelineEntry.message.id) &&
       !assistantResponseStillInProgress;
 
+    const gentleFlowStart =
+      timelineEntry.message.role === "user"
+        ? gentleFlowMarks.startByMessageId.get(timelineEntry.message.id)
+        : undefined;
+    if (gentleFlowStart) {
+      nextRows.push(gentleFlowStart);
+    }
+
     nextRows.push({
       kind: "message",
       id: timelineEntry.id,
@@ -1393,7 +1479,10 @@ export function deriveMessagesTimelineRows(input: {
       createdAt: input.activeTurnStartedAt,
     });
   }
-  const rows = attachTrailingToolGroupsToAssistant(nextRows);
+  const rows = insertGentleFlowEndRows(
+    attachTrailingToolGroupsToAssistant(nextRows),
+    gentleFlowMarks.ends,
+  );
   input.queuedMessages?.forEach((queuedMessage, index) => {
     rows.push({
       kind: "queued-message",
@@ -1536,6 +1625,21 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
     case "context-compaction": {
       const bc = b as typeof a;
       return a.createdAt === bc.createdAt && a.label === bc.label;
+    }
+
+    case "gentle-flow-start": {
+      const bg = b as typeof a;
+      return a.createdAt === bg.createdAt && a.turnId === bg.turnId && a.label === bg.label;
+    }
+
+    case "gentle-flow-end": {
+      const bg = b as typeof a;
+      return (
+        a.createdAt === bg.createdAt &&
+        a.label === bg.label &&
+        a.durationMs === bg.durationMs &&
+        a.outcome === bg.outcome
+      );
     }
 
     case "proposed-plan":

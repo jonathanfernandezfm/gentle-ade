@@ -5,6 +5,8 @@ import { ThreadId } from "@t3tools/contracts";
 import {
   commandDetailRepeatsCommand,
   extractCommandOutputText,
+  gentleSkillDisplayLabel,
+  resolveGentleSkillName,
   resolveViewedImageAsset,
   resolveWorkEntryToolPresentation,
   summarizeToolGroup,
@@ -708,5 +710,70 @@ describe("device group summaries", () => {
         },
       ]),
     ).toBe("Used 1 tool");
+  });
+});
+
+describe("gentle skill invocations", () => {
+  const claudeSkill = (skill: string): WorkLogPresentationEntry => ({
+    label: "Tool call",
+    toolTitle: "Tool call",
+    detail: `Skill: ${skill}`,
+    tone: "tool",
+    itemType: "dynamic_tool_call",
+  });
+
+  it("recognises the server's `Skill: <name>` summary wherever it lands", () => {
+    expect(resolveGentleSkillName(claudeSkill("judgment-day"))).toBe("judgment-day");
+    expect(resolveGentleSkillName({ label: "Skill: sdd-apply" })).toBe("sdd-apply");
+    expect(resolveGentleSkillName({ label: "Tool call", toolTitle: "Skill · go-testing" })).toBe(
+      "go-testing",
+    );
+    expect(gentleSkillDisplayLabel(claudeSkill("judgment-day"))).toBe("Skill · judgment-day");
+  });
+
+  it("recognises structured Skill tool data", () => {
+    expect(
+      resolveGentleSkillName({
+        label: "Tool call",
+        toolData: { toolName: "Skill", input: { skill: "chained-pr", args: "" } },
+      }),
+    ).toBe("chained-pr");
+    expect(
+      resolveGentleSkillName({
+        label: "Tool call",
+        toolData: { toolName: "Skill", arguments: { skill: "skill-creator" } },
+      }),
+    ).toBe("skill-creator");
+  });
+
+  it("leaves ordinary rows and prose mentioning skills alone", () => {
+    expect(resolveGentleSkillName({ label: "Read file" })).toBeNull();
+    expect(
+      resolveGentleSkillName({ label: "Tool call", detail: "Listed skills: none" }),
+    ).toBeNull();
+    expect(
+      resolveGentleSkillName({ label: "Tool call", toolData: { toolName: "Skill", input: {} } }),
+    ).toBeNull();
+    expect(gentleSkillDisplayLabel({ label: "Read file" })).toBeNull();
+  });
+
+  it("groups skill calls under their own action and summary", () => {
+    expect(toolGroupAction(claudeSkill("judgment-day"))).toBe("skill");
+    expect(toolGroupSummaryKind([claudeSkill("judgment-day"), claudeSkill("chained-pr")])).toBe(
+      "skill",
+    );
+    expect(summarizeToolGroup([claudeSkill("judgment-day")])).toBe("Ran 1 skill");
+    expect(
+      summarizeToolGroup([
+        claudeSkill("judgment-day"),
+        claudeSkill("chained-pr"),
+        {
+          label: "Ran command",
+          tone: "tool",
+          itemType: "command_execution",
+          command: "git status",
+        },
+      ]),
+    ).toBe("Ran 2 skills and ran 1 command");
   });
 });

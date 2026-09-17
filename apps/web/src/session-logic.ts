@@ -638,6 +638,18 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     if (toolData !== undefined) {
       entry.toolData = toolData;
     }
+  } else {
+    // Claude's `Skill` tool is a plain dynamic tool call; keep its structured
+    // `{ toolName: "Skill", input: { skill } }` so the work log can label it
+    // without parsing the detail text.
+    const data = asRecord(payload?.data);
+    if (
+      data &&
+      typeof data.toolName === "string" &&
+      data.toolName.trim().toLowerCase() === "skill"
+    ) {
+      entry.toolData = data;
+    }
   }
   if (itemType) {
     entry.itemType = itemType;

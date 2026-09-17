@@ -4,13 +4,31 @@ import {
   type RuntimeSubagent,
 } from "@t3tools/client-runtime/state/subagentRuntime";
 
+/**
+ * Gentle AI installs its phase agents under fixed role prefixes: `sdd-*`
+ * (spec-driven phases), `jd-*` (Judgment Day judges and fixer) and `review-*`
+ * (receipt-driven review lenses). Anything else is an ordinary subagent.
+ */
+export function gentleAgentRoleGroup(role: string | null | undefined): "sdd" | "review" | null {
+  const normalized = role?.trim().toLowerCase() ?? "";
+  if (normalized.startsWith("sdd-")) return "sdd";
+  if (normalized.startsWith("jd-") || normalized.startsWith("review-")) return "review";
+  return null;
+}
+
+export function isGentleAgentRole(role: string | null | undefined): boolean {
+  return gentleAgentRoleGroup(role) !== null;
+}
+
 /** Summarize observed states without treating idle or missing agents as completed. */
 export function deriveAgentSpawnSummary({
   agents,
   agentCount,
   coordinatorStatus,
 }: {
-  agents: ReadonlyArray<Pick<RuntimeSubagent, "kind" | "status">>;
+  agents: ReadonlyArray<
+    Pick<RuntimeSubagent, "kind" | "status"> & { readonly role?: string | null }
+  >;
   agentCount: number;
   coordinatorStatus?: RuntimeSubagent["status"] | undefined;
 }) {
@@ -21,6 +39,7 @@ export function deriveAgentSpawnSummary({
     (agent) => agent.status === "cancelled" || agent.status === "interrupted",
   ).length;
   const batches = agents.filter((agent) => agent.kind === "subagent_batch").length;
+  const gentle = agents.filter((agent) => isGentleAgentRole(agent.role)).length;
   const individuals = agentCount - batches;
   // Workflow coordinators can keep running between dynamic member launches.
   const live =
@@ -60,5 +79,5 @@ export function deriveAgentSpawnSummary({
       : status === "✓ completed"
         ? "completed"
         : "inactive";
-  return { live, lead, status, tone };
+  return { live, lead, status, tone, gentle };
 }

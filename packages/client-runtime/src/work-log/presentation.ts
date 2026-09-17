@@ -56,6 +56,7 @@ export type ToolGroupAction =
   | "device"
   | "code-search"
   | "search"
+  | "skill"
   | "other"
   | "update";
 
@@ -227,6 +228,46 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function nonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+const SKILL_LABEL_PATTERN = /^Skill\s*[:·]\s*(\S+)/i;
+
+/**
+ * Name of the skill a work-log row invoked, or `null` for any other row.
+ * Claude's `Skill` tool is summarized by the server as `Skill: <name>` (it
+ * lands in `detail` under a generic "Tool call" title); providers that carry
+ * structured tool data are matched on `toolName === "Skill"` with the skill in
+ * `input.skill` (or `arguments`/`rawInput`). Both clients use this rule.
+ */
+export function resolveGentleSkillName(
+  entry: Pick<WorkLogPresentationEntry, "label" | "toolTitle" | "toolData" | "detail">,
+): string | null {
+  const data = asRecord(entry.toolData);
+  if (data) {
+    const toolName = nonEmptyString(data.toolName ?? data.name ?? data.tool);
+    if (toolName?.trim().toLowerCase() === "skill") {
+      const input =
+        asRecord(data.input) ??
+        asRecord(data.arguments) ??
+        asRecord(data.rawInput) ??
+        asRecord(asRecord(data.item)?.input);
+      const skill = nonEmptyString(input?.skill);
+      if (skill) return skill.trim();
+    }
+  }
+  for (const candidate of [entry.toolTitle, entry.label, entry.detail]) {
+    const match = candidate ? SKILL_LABEL_PATTERN.exec(candidate.trim()) : null;
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
+/** "Skill · <name>" for skill invocations, `null` otherwise. */
+export function gentleSkillDisplayLabel(
+  entry: Pick<WorkLogPresentationEntry, "label" | "toolTitle" | "toolData" | "detail">,
+): string | null {
+  const skill = resolveGentleSkillName(entry);
+  return skill === null ? null : `Skill · ${skill}`;
 }
 
 function commandResultContent(value: unknown): string | null {
@@ -473,6 +514,7 @@ export function toolGroupAction(entry: WorkLogPresentationEntry): ToolGroupActio
   if (presentation?.action !== undefined) return presentation.action;
   if (presentation?.icon === "browser") return "browser";
   if (presentation?.icon === "device") return "device";
+  if (resolveGentleSkillName(entry) !== null) return "skill";
   if (
     entry.requestKind === "file-read" ||
     entry.itemType === "image_view" ||
@@ -588,6 +630,8 @@ function toolGroupActionLabel(action: ToolGroupAction, count: number): string {
       return `Searched the web ${count} ${count === 1 ? "time" : "times"}`;
     case "code-search":
       return `Searched code ${count} ${count === 1 ? "time" : "times"}`;
+    case "skill":
+      return `Ran ${count} ${count === 1 ? "skill" : "skills"}`;
     case "other":
       return `Used ${count} ${count === 1 ? "tool" : "tools"}`;
     case "update":
