@@ -6,6 +6,7 @@ import {
   PositiveInt,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import { GentleAiFlowId } from "./gentleAi.ts";
 
 /**
  * Inline context records: the typed payload behind every composer chip.
@@ -260,6 +261,13 @@ const COMPOSER_CONTEXT_MAX_SERIALIZED_CHARS = 16_000_000;
 /** Structured context riding on a user message. Undecodable records are dropped, not fatal. */
 export const OrchestrationMessageContext = Schema.Struct({
   version: Schema.Literal(1),
+  /**
+   * Gentle AI flow the composer was in when this message was sent (see
+   * `GENTLE_AI_FLOWS`). Absent for Organic and for messages sent before the
+   * flow picker existed. The timeline derives its start/finish marks from it;
+   * the provider never sees this field, only the invocation text.
+   */
+  gentleAiFlow: Schema.optionalKey(GentleAiFlowId),
   records: Schema.Array(Schema.Unknown)
     .check(
       Schema.isMaxLength(COMPOSER_CONTEXT_MAX_RECORDS),

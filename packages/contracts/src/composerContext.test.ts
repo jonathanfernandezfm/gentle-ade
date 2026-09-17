@@ -11,6 +11,7 @@ import { OrchestrationMessage, ThreadTurnStartCommand } from "./orchestration.ts
 
 const decodeRecord = Schema.decodeUnknownOption(ComposerContextRecord);
 const decodeContext = Schema.decodeUnknownSync(OrchestrationMessageContext);
+const encodeContext = Schema.encodeSync(OrchestrationMessageContext);
 const decodeMessage = Schema.decodeUnknownSync(OrchestrationMessage);
 const decodeTurnStart = Schema.decodeUnknownSync(ThreadTurnStartCommand);
 
@@ -192,6 +193,22 @@ describe("OrchestrationMessageContext", () => {
       records: [{ ...knownRecords.skill, contextId: "  ctx_1  ", name: "  review  " }],
     });
     expect(context.records[0]).toMatchObject({ contextId: "ctx_1", name: "review" });
+  });
+
+  it("round-trips the Gentle AI flow the composer was in", () => {
+    const context = decodeContext({ version: 1, gentleAiFlow: "sdd-new", records: [] });
+    expect(context.gentleAiFlow).toBe("sdd-new");
+    expect(encodeContext(context)).toMatchObject({
+      gentleAiFlow: "sdd-new",
+    });
+    // Absent for Organic and for every message sent before the picker existed.
+    expect(decodeContext({ version: 1, records: [] }).gentleAiFlow).toBeUndefined();
+  });
+
+  it("rejects a flow that is not in the Gentle AI catalog", () => {
+    expect(() =>
+      decodeContext({ version: 1, gentleAiFlow: "sdd-teleport", records: [] }),
+    ).toThrow();
   });
 
   it("rejects oversized arrays before dropping malformed records", () => {

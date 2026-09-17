@@ -338,6 +338,10 @@
     "./cliRelease": {
       "types": "./src/cliRelease.ts",
       "import": "./src/cliRelease.ts"
+    },
+    "./gentleAiFlow": {
+      "types": "./src/gentleAiFlow.ts",
+      "import": "./src/gentleAiFlow.ts"
     }
   },
   "scripts": {

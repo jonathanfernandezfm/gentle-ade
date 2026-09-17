@@ -521,6 +521,324 @@ export const GENTLE_AI_PRESETS: ReadonlyArray<GentleAiPresetDescriptor> = [
   },
 ] as const;
 
+// ── Catalog: flows (composer modes) ────────────────────────────
+
+/**
+ * Visual family of a flow. The composer tints itself per group so switching
+ * from an SDD phase to a review is visible before anything is sent; `organic`
+ * is the untinted default (Organic Driven Development, no explicit skill).
+ */
+export const GentleAiFlowGroup = Schema.Literals(["organic", "sdd", "review", "workflow"]);
+export type GentleAiFlowGroup = typeof GentleAiFlowGroup.Type;
+
+/**
+ * A flow is one Gentle AI process the user can put the composer into. Each
+ * maps to the artifacts Gentle AI installs per agent: a slash command
+ * (Claude `.claude/commands/gentle-sdd-*.md`, OpenCode `commands/sdd-*.md`)
+ * and/or a skill directory. Which one a provider actually has is decided at
+ * send time against its workspace snapshot, never assumed from this list.
+ */
+export const GentleAiFlowId = Schema.Literals([
+  "organic",
+  "sdd-init",
+  "sdd-new",
+  "sdd-explore",
+  "sdd-research",
+  "sdd-ff",
+  "sdd-continue",
+  "sdd-apply",
+  "sdd-verify",
+  "sdd-archive",
+  "sdd-status",
+  "sdd-onboard",
+  "judgment-day",
+  "chained-pr",
+  "work-unit-commits",
+  "skill-creator",
+  "skill-improver",
+  "skill-registry",
+  "cognitive-doc-design",
+  "go-testing",
+]);
+export type GentleAiFlowId = typeof GentleAiFlowId.Type;
+
+export interface GentleAiFlowDescriptor {
+  readonly id: GentleAiFlowId;
+  readonly group: GentleAiFlowGroup;
+  /** Full label for menus, e.g. "SDD · New change". */
+  readonly label: string;
+  /** Short label for the composer control and timeline marks, e.g. "New change". */
+  readonly shortLabel: string;
+  readonly description: string;
+  /** Composer placeholder while the flow is selected. */
+  readonly placeholder: string;
+  /**
+   * Skill directory name Gentle AI installs (`~/.claude/skills/<skill>`,
+   * `~/.codex/skills/<skill>` …), or `null` when the flow is only a command.
+   */
+  readonly skill: string | null;
+  /** Slash command names without the leading slash, per agent family. */
+  readonly commands: {
+    readonly claude: string | null;
+    readonly opencode: string | null;
+  };
+  /**
+   * Prose used when the provider has neither the command nor the skill: the
+   * agent is told which Gentle AI workflow to follow instead of an
+   * unexpanded `/name`. Phrased as the object of "… to <intent>".
+   */
+  readonly fallbackIntent: string;
+  /** Flows that make sense once per thread return the composer to Organic after sending. */
+  readonly oneShot: boolean;
+}
+
+export const GENTLE_AI_FLOWS: ReadonlyArray<GentleAiFlowDescriptor> = [
+  {
+    id: "organic",
+    group: "organic",
+    label: "Organic",
+    shortLabel: "Organic",
+    description: "Organic Driven Development: explore, then implement task by task. The default.",
+    placeholder: "Ask anything…",
+    skill: null,
+    commands: { claude: null, opencode: null },
+    fallbackIntent: "work organically",
+    oneShot: false,
+  },
+  {
+    id: "sdd-init",
+    group: "sdd",
+    label: "SDD · Initialize project",
+    shortLabel: "Init",
+    description: "Detect the stack, choose the artifact store, and write the skill registry.",
+    placeholder: "Optional: artifact store preference (openspec, engram, hybrid)…",
+    skill: "sdd-init",
+    commands: { claude: "gentle-sdd-init", opencode: "sdd-init" },
+    fallbackIntent: "initialize Spec-Driven Development for this project",
+    oneShot: true,
+  },
+  {
+    id: "sdd-new",
+    group: "sdd",
+    label: "SDD · New change",
+    shortLabel: "New change",
+    description: "Explore the codebase, then write a proposal for a named change.",
+    placeholder: "Name the change and what it should achieve…",
+    skill: null,
+    commands: { claude: "gentle-sdd-new", opencode: "sdd-new" },
+    fallbackIntent: "start a new SDD change: explore first, then propose",
+    oneShot: true,
+  },
+  {
+    id: "sdd-explore",
+    group: "sdd",
+    label: "SDD · Explore",
+    shortLabel: "Explore",
+    description: "Investigate an idea against the real code before any artifact exists.",
+    placeholder: "What should be investigated?",
+    skill: "sdd-explore",
+    commands: { claude: "gentle-sdd-explore", opencode: "sdd-explore" },
+    fallbackIntent: "explore the codebase for this idea",
+    oneShot: false,
+  },
+  {
+    id: "sdd-research",
+    group: "sdd",
+    label: "SDD · Research",
+    shortLabel: "Research",
+    description: "Collect source-backed external evidence and disclose the gaps.",
+    placeholder: "What question needs outside evidence?",
+    skill: "sdd-research",
+    commands: { claude: "gentle-sdd-research", opencode: "sdd-research" },
+    fallbackIntent: "research this question with attributed sources",
+    oneShot: false,
+  },
+  {
+    id: "sdd-ff",
+    group: "sdd",
+    label: "SDD · Fast-forward planning",
+    shortLabel: "Fast-forward",
+    description: "Run proposal, spec, design, and tasks back to back.",
+    placeholder: "Change name to plan end to end…",
+    skill: null,
+    commands: { claude: "gentle-sdd-ff", opencode: "sdd-ff" },
+    fallbackIntent: "fast-forward every SDD planning phase from proposal through tasks",
+    oneShot: true,
+  },
+  {
+    id: "sdd-continue",
+    group: "sdd",
+    label: "SDD · Continue",
+    shortLabel: "Continue",
+    description: "Run the next phase in the dependency chain.",
+    placeholder: "Optional: change name or notes for the next phase…",
+    skill: null,
+    commands: { claude: "gentle-sdd-continue", opencode: "sdd-continue" },
+    fallbackIntent: "continue the next SDD phase in the dependency chain",
+    oneShot: false,
+  },
+  {
+    id: "sdd-apply",
+    group: "sdd",
+    label: "SDD · Apply",
+    shortLabel: "Apply",
+    description: "Implement the remaining tasks against spec and design.",
+    placeholder: "Optional: which tasks or constraints to focus on…",
+    skill: "sdd-apply",
+    commands: { claude: "gentle-sdd-apply", opencode: "sdd-apply" },
+    fallbackIntent: "implement the remaining SDD tasks for the active change",
+    oneShot: false,
+  },
+  {
+    id: "sdd-verify",
+    group: "sdd",
+    label: "SDD · Verify",
+    shortLabel: "Verify",
+    description: "Validate the implementation against spec, design, and tasks.",
+    placeholder: "Optional: change name to verify…",
+    skill: "sdd-verify",
+    commands: { claude: "gentle-sdd-verify", opencode: "sdd-verify" },
+    fallbackIntent: "verify the implementation against the SDD spec, design, and tasks",
+    oneShot: true,
+  },
+  {
+    id: "sdd-archive",
+    group: "sdd",
+    label: "SDD · Archive",
+    shortLabel: "Archive",
+    description: "Merge delta specs into the main specs and close the change.",
+    placeholder: "Change name to archive…",
+    skill: "sdd-archive",
+    commands: { claude: "gentle-sdd-archive", opencode: "sdd-archive" },
+    fallbackIntent: "archive the SDD change and sync its specs",
+    oneShot: true,
+  },
+  {
+    id: "sdd-status",
+    group: "sdd",
+    label: "SDD · Status",
+    shortLabel: "Status",
+    description: "Show the structured phase status of the active change.",
+    placeholder: "Optional: change name…",
+    skill: null,
+    commands: { claude: "gentle-sdd-status", opencode: "sdd-status" },
+    fallbackIntent: "report the structured SDD status for the active change",
+    oneShot: true,
+  },
+  {
+    id: "sdd-onboard",
+    group: "sdd",
+    label: "SDD · Onboard",
+    shortLabel: "Onboard",
+    description: "Guided walkthrough of a full SDD cycle on this codebase.",
+    placeholder: "Optional: a small real change to practice on…",
+    skill: "sdd-onboard",
+    commands: { claude: "gentle-sdd-onboard", opencode: "sdd-onboard" },
+    fallbackIntent: "onboard me through a complete SDD cycle on this codebase",
+    oneShot: true,
+  },
+  {
+    id: "judgment-day",
+    group: "review",
+    label: "Review · Judgment Day",
+    shortLabel: "Judgment Day",
+    description: "Blind dual adversarial review with bounded fix rounds.",
+    placeholder: "What should be judged? (branch, files, or a change)",
+    skill: "judgment-day",
+    commands: { claude: null, opencode: null },
+    fallbackIntent: "run a blind dual adversarial review (Judgment Day)",
+    oneShot: false,
+  },
+  {
+    id: "chained-pr",
+    group: "workflow",
+    label: "Workflow · Chained PRs",
+    shortLabel: "Chained PRs",
+    description: "Split an oversized change into reviewable chained pull requests.",
+    placeholder: "Which change should be split?",
+    skill: "chained-pr",
+    commands: { claude: null, opencode: null },
+    fallbackIntent: "split this change into chained pull requests",
+    oneShot: false,
+  },
+  {
+    id: "work-unit-commits",
+    group: "workflow",
+    label: "Workflow · Work-unit commits",
+    shortLabel: "Commits",
+    description: "Plan commits as reviewable units that keep tests and docs with the code.",
+    placeholder: "What should be committed?",
+    skill: "work-unit-commits",
+    commands: { claude: null, opencode: null },
+    fallbackIntent: "plan and create work-unit commits",
+    oneShot: false,
+  },
+  {
+    id: "skill-creator",
+    group: "workflow",
+    label: "Workflow · Skill creator",
+    shortLabel: "Skill creator",
+    description: "Author a new LLM-first skill with valid frontmatter.",
+    placeholder: "Describe the skill to create…",
+    skill: "skill-creator",
+    commands: { claude: null, opencode: "skill-creator" },
+    fallbackIntent: "create a new LLM-first skill",
+    oneShot: false,
+  },
+  {
+    id: "skill-improver",
+    group: "workflow",
+    label: "Workflow · Skill improver",
+    shortLabel: "Skill improver",
+    description: "Audit and upgrade an existing skill.",
+    placeholder: "Which skill should be improved?",
+    skill: "skill-improver",
+    commands: { claude: null, opencode: null },
+    fallbackIntent: "audit and improve the named skill",
+    oneShot: false,
+  },
+  {
+    id: "skill-registry",
+    group: "workflow",
+    label: "Workflow · Skill registry",
+    shortLabel: "Skill registry",
+    description: "Re-index the available skills into .atl/skill-registry.md.",
+    placeholder: "Optional notes…",
+    skill: "skill-registry",
+    commands: { claude: null, opencode: "skill-registry" },
+    fallbackIntent: "refresh the skill registry",
+    oneShot: true,
+  },
+  {
+    id: "cognitive-doc-design",
+    group: "workflow",
+    label: "Workflow · Doc design",
+    shortLabel: "Doc design",
+    description: "Write guides, READMEs, and RFCs that reduce cognitive load.",
+    placeholder: "Which document, for whom?",
+    skill: "cognitive-doc-design",
+    commands: { claude: null, opencode: null },
+    fallbackIntent: "design this document for low cognitive load",
+    oneShot: false,
+  },
+  {
+    id: "go-testing",
+    group: "workflow",
+    label: "Workflow · Go testing",
+    shortLabel: "Go testing",
+    description: "Focused Go testing patterns: coverage, teatest, golden files.",
+    placeholder: "What Go code needs tests?",
+    skill: "go-testing",
+    commands: { claude: null, opencode: null },
+    fallbackIntent: "apply focused Go testing patterns",
+    oneShot: false,
+  },
+] as const;
+
+export const GENTLE_AI_FLOW_BY_ID: ReadonlyMap<GentleAiFlowId, GentleAiFlowDescriptor> = new Map(
+  GENTLE_AI_FLOWS.map((flow) => [flow.id, flow]),
+);
+
 export const GentleAiSddMode = Schema.Literals(["single", "multi"]);
 export type GentleAiSddMode = typeof GentleAiSddMode.Type;
 
@@ -732,10 +1050,40 @@ export const GentleAiProjectStatus = Schema.Struct({
   oddTasks: Schema.Array(GentleAiOddTaskDocument),
   openspecChanges: Schema.Array(Schema.String),
   skillRegistry: GentleAiSkillRegistryState,
+  /**
+   * Whether `openspec/config.yaml` exists. Together with the skill registry it
+   * is the filesystem evidence that `sdd-init` ran for this repository.
+   */
+  openspecConfigPresent: Schema.Boolean,
   engramPresent: Schema.Boolean,
   errors: Schema.Array(Schema.String),
 });
 export type GentleAiProjectStatus = typeof GentleAiProjectStatus.Type;
+
+/**
+ * Readiness of a repository for Gentle AI flows, derived from
+ * `GentleAiProjectStatus`: `ready` when the skill registry and the OpenSpec
+ * config both exist, `partial` when only one does, `missing` when neither.
+ * Non-git folders are `not-applicable`.
+ */
+export const GentleAiProjectReadiness = Schema.Literals([
+  "ready",
+  "partial",
+  "missing",
+  "not-applicable",
+]);
+export type GentleAiProjectReadiness = typeof GentleAiProjectReadiness.Type;
+
+export function deriveGentleAiProjectReadiness(
+  status: Pick<GentleAiProjectStatus, "isGitRepo" | "skillRegistry" | "openspecConfigPresent">,
+): GentleAiProjectReadiness {
+  if (!status.isGitRepo) return "not-applicable";
+  const registry = status.skillRegistry.present;
+  const config = status.openspecConfigPresent;
+  if (registry && config) return "ready";
+  if (registry || config) return "partial";
+  return "missing";
+}
 
 /** Payload for every per-workspace query in this domain. */
 export const GentleAiWorkspaceInput = Schema.Struct({

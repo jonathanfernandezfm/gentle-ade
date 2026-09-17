@@ -4,18 +4,24 @@ import * as Schema from "effect/Schema";
 import {
   GENTLE_AI_AGENTS,
   GENTLE_AI_COMPONENTS,
+  GENTLE_AI_FLOW_BY_ID,
+  GENTLE_AI_FLOWS,
   GENTLE_AI_PERSONAS,
   GENTLE_AI_PRESETS,
   GENTLE_AI_SKILLS,
   GentleAiCommandEvent,
+  GentleAiFlowId,
   GentleAiInstallState,
   GentleAiRunRequest,
+  deriveGentleAiProjectReadiness,
   type GentleAiComponentId,
+  type GentleAiProjectStatus,
 } from "./gentleAi.ts";
 
 const decodeInstallState = Schema.decodeUnknownSync(GentleAiInstallState);
 const decodeRunRequest = Schema.decodeUnknownSync(GentleAiRunRequest);
 const decodeCommandEvent = Schema.decodeUnknownSync(GentleAiCommandEvent);
+const decodeFlowId = Schema.decodeUnknownSync(GentleAiFlowId);
 
 const uniqueIds = (ids: ReadonlyArray<string>) => new Set(ids).size;
 
@@ -62,6 +68,100 @@ describe("Gentle AI catalog", () => {
       "neutral",
       "custom",
     ]);
+  });
+});
+
+describe("Gentle AI flows", () => {
+  it("gives every flow id in the schema exactly one descriptor", () => {
+    const ids = GentleAiFlowId.literals;
+    expect(GENTLE_AI_FLOWS).toHaveLength(ids.length);
+    expect(uniqueIds(GENTLE_AI_FLOWS.map((flow) => flow.id))).toBe(ids.length);
+    expect(GENTLE_AI_FLOWS.map((flow) => flow.id)).toEqual([...ids]);
+    for (const id of ids) {
+      expect(GENTLE_AI_FLOW_BY_ID.get(id)?.id).toBe(id);
+    }
+    expect(GENTLE_AI_FLOW_BY_ID.size).toBe(ids.length);
+  });
+
+  it("puts Organic first as the untinted, invocation-free default", () => {
+    const organic = GENTLE_AI_FLOWS[0]!;
+    expect(organic.id).toBe("organic");
+    expect(organic.group).toBe("organic");
+    expect(organic.skill).toBeNull();
+    expect(organic.commands.claude).toBeNull();
+    expect(organic.commands.opencode).toBeNull();
+    expect(organic.oneShot).toBe(false);
+    // Only Organic may be invocation-free; everything else must be reachable.
+    expect(GENTLE_AI_FLOWS.filter((flow) => flow.group === "organic")).toHaveLength(1);
+  });
+
+  it("gives every non-organic flow a skill or at least one slash command", () => {
+    for (const flow of GENTLE_AI_FLOWS) {
+      if (flow.id === "organic") continue;
+      const reachable =
+        flow.skill !== null || flow.commands.claude !== null || flow.commands.opencode !== null;
+      expect(reachable, `flow ${flow.id} has no skill and no command`).toBe(true);
+    }
+  });
+
+  it("populates the copy every surface renders", () => {
+    for (const flow of GENTLE_AI_FLOWS) {
+      expect(flow.label.length, `flow ${flow.id} label`).toBeGreaterThan(0);
+      expect(flow.shortLabel.length, `flow ${flow.id} shortLabel`).toBeGreaterThan(0);
+      expect(flow.description.length, `flow ${flow.id} description`).toBeGreaterThan(0);
+      expect(flow.placeholder.length, `flow ${flow.id} placeholder`).toBeGreaterThan(0);
+      expect(flow.fallbackIntent.length, `flow ${flow.id} fallbackIntent`).toBeGreaterThan(0);
+      // Commands are stored bare so the composer owns the leading slash.
+      expect(flow.commands.claude?.startsWith("/")).not.toBe(true);
+      expect(flow.commands.opencode?.startsWith("/")).not.toBe(true);
+      expect(flow.skill?.startsWith("/")).not.toBe(true);
+    }
+  });
+
+  it("rejects a flow id that is not in the catalog", () => {
+    expect(() => decodeFlowId("sdd-teleport")).toThrow();
+  });
+});
+
+describe("deriveGentleAiProjectReadiness", () => {
+  const status = (input: {
+    readonly isGitRepo: boolean;
+    readonly registry: boolean;
+    readonly config: boolean;
+  }): Pick<GentleAiProjectStatus, "isGitRepo" | "skillRegistry" | "openspecConfigPresent"> => ({
+    isGitRepo: input.isGitRepo,
+    skillRegistry: {
+      present: input.registry,
+      path: ".atl/skill-registry.md",
+      skillCount: input.registry ? 3 : null,
+      updatedAt: null,
+    },
+    openspecConfigPresent: input.config,
+  });
+
+  it("covers the full matrix", () => {
+    expect(
+      deriveGentleAiProjectReadiness(status({ isGitRepo: true, registry: true, config: true })),
+    ).toBe("ready");
+    expect(
+      deriveGentleAiProjectReadiness(status({ isGitRepo: true, registry: true, config: false })),
+    ).toBe("partial");
+    expect(
+      deriveGentleAiProjectReadiness(status({ isGitRepo: true, registry: false, config: true })),
+    ).toBe("partial");
+    expect(
+      deriveGentleAiProjectReadiness(status({ isGitRepo: true, registry: false, config: false })),
+    ).toBe("missing");
+  });
+
+  it("reports a non-git folder as not applicable whatever the files say", () => {
+    for (const registry of [true, false]) {
+      for (const config of [true, false]) {
+        expect(deriveGentleAiProjectReadiness(status({ isGitRepo: false, registry, config }))).toBe(
+          "not-applicable",
+        );
+      }
+    }
   });
 });
 
