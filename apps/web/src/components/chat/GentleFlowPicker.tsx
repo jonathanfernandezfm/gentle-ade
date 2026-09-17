@@ -83,7 +83,7 @@ export const GentleFlowPicker = memo(function GentleFlowPicker(props: {
         <SelectPopup
           alignItemWithTrigger={false}
           matchTriggerWidth={false}
-          popupClassName="max-h-[min(60vh,32rem)]"
+          className="max-h-[min(60vh,32rem,var(--available-height))]"
           {...composerFloatingLayerProps}
         >
           {props.groups.map((group, index) => (
