@@ -1482,10 +1482,34 @@ function workflowAgentStatus(entry: ClaudeWorkflowAgentEntry): RuntimeTaskStatus
   }
 }
 
+/**
+ * Claude Code's `Skill` tool carries `{ skill, args? }`. Returns the skill name
+ * for a well-formed call, `undefined` for anything else.
+ */
+function readSkillToolName(toolName: string, input: Record<string, unknown>): string | undefined {
+  if (toolName.trim().toLowerCase() !== "skill") {
+    return undefined;
+  }
+  const value = input.skill;
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const name = value.trim();
+  return name.length > 0 ? name : undefined;
+}
+
 function summarizeToolRequest(toolName: string, input: Record<string, unknown>): string {
   const imagePath = readToolImagePath(toolName, input);
   if (imagePath) {
     return imagePath;
+  }
+
+  // A skill invocation is a named workflow, not an opaque tool call: clients
+  // key off `Skill: <name>` to label it (Gentle AI flows, approval prompts).
+  // Without this it would fall through to the raw `{"skill":…,"args":…}` JSON.
+  const skillName = readSkillToolName(toolName, input);
+  if (skillName) {
+    return `Skill: ${skillName}`;
   }
 
   const commandValue = input.command ?? input.cmd;

@@ -2233,6 +2233,112 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
+  it.effect("summarizes a Claude Skill tool call by the skill it invokes", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+
+      const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.takeUntil((event) => event.type === "turn.completed"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+
+      yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "plan this change",
+        attachments: [],
+      });
+
+      // Named skill: the summary must be the skill, not the raw input JSON.
+      harness.query.emit({
+        type: "stream_event",
+        session_id: "sdk-session-skill",
+        uuid: "stream-skill-1",
+        parent_tool_use_id: null,
+        event: {
+          type: "content_block_start",
+          index: 0,
+          content_block: {
+            type: "tool_use",
+            id: "tool-skill-1",
+            name: "Skill",
+            input: { skill: "gentle-sdd-new", args: "auth refactor" },
+          },
+        },
+      } as unknown as SDKMessage);
+
+      // Streamed input: the same summary must appear once the JSON parses.
+      harness.query.emit({
+        type: "stream_event",
+        session_id: "sdk-session-skill",
+        uuid: "stream-skill-2",
+        parent_tool_use_id: null,
+        event: {
+          type: "content_block_start",
+          index: 1,
+          content_block: { type: "tool_use", id: "tool-skill-2", name: "Skill", input: {} },
+        },
+      } as unknown as SDKMessage);
+      harness.query.emit({
+        type: "stream_event",
+        session_id: "sdk-session-skill",
+        uuid: "stream-skill-3",
+        parent_tool_use_id: null,
+        event: {
+          type: "content_block_delta",
+          index: 1,
+          delta: {
+            type: "input_json_delta",
+            partial_json: encodeUnknownJsonString({ skill: "judgment-day" }),
+          },
+        },
+      } as unknown as SDKMessage);
+
+      harness.query.emit({
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        errors: [],
+        session_id: "sdk-session-skill",
+        uuid: "result-skill-1",
+      } as unknown as SDKMessage);
+
+      const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
+      const started = runtimeEvents.find(
+        (event) => event.type === "item.started" && String(event.itemId) === "tool-skill-1",
+      );
+      assert.equal(started?.type, "item.started");
+      if (started?.type === "item.started") {
+        assert.equal(started.payload.detail, "Skill: gentle-sdd-new");
+        // A skill is still an ordinary tool call; only the label changes.
+        assert.equal(started.payload.itemType, "dynamic_tool_call");
+      }
+
+      const streamedDetails = runtimeEvents
+        .filter(
+          (event) =>
+            (event.type === "item.started" || event.type === "item.updated") &&
+            String(event.itemId) === "tool-skill-2",
+        )
+        .map((event) =>
+          event.type === "item.started" || event.type === "item.updated"
+            ? event.payload.detail
+            : undefined,
+        );
+      assert.include(streamedDetails, "Skill: judgment-day");
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
   it.effect("treats user-aborted Claude results as interrupted without a runtime error", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {

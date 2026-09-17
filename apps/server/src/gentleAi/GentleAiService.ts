@@ -572,12 +572,25 @@ export const make = Effect.fn("GentleAiService.make")(function* () {
       errors.push(`${label}: ${describeFailure(cause)}`);
     };
 
-    const [isGitRepo, oddTasks, openspecChanges, skillRegistry, engramPresent] = yield* Effect.all(
+    const [
+      isGitRepo,
+      oddTasks,
+      openspecChanges,
+      skillRegistry,
+      openspecConfigPresent,
+      engramPresent,
+    ] = yield* Effect.all(
       [
         fs.exists(path.join(workspaceRoot, ".git")).pipe(Effect.orElseSucceed(() => false)),
         readOddTaskDocuments(workspaceRoot),
         readOpenspecChanges(workspaceRoot),
         readSkillRegistry(workspaceRoot),
+        // `openspec/config.yaml` is what `sdd-init` writes; together with the
+        // skill registry it is the filesystem evidence that the project was
+        // initialized, and it is read even without the CLI on PATH.
+        fs
+          .exists(path.join(workspaceRoot, "openspec", "config.yaml"))
+          .pipe(Effect.orElseSucceed(() => false)),
         fs.exists(path.join(workspaceRoot, ".engram")).pipe(Effect.orElseSucceed(() => false)),
       ],
       { concurrency: "unbounded" },
@@ -598,6 +611,7 @@ export const make = Effect.fn("GentleAiService.make")(function* () {
         oddTasks,
         openspecChanges,
         skillRegistry,
+        openspecConfigPresent,
         engramPresent,
         errors,
       } satisfies GentleAiProjectStatus;
@@ -640,6 +654,7 @@ export const make = Effect.fn("GentleAiService.make")(function* () {
       oddTasks,
       openspecChanges,
       skillRegistry,
+      openspecConfigPresent,
       engramPresent,
       errors,
     } satisfies GentleAiProjectStatus;

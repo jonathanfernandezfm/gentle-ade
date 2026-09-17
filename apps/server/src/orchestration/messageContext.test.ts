@@ -21,6 +21,7 @@ const NOW = "2026-01-01T00:00:00.000Z";
 
 const context: OrchestrationMessageContext = {
   version: 1,
+  gentleAiFlow: "sdd-new",
   records: [
     {
       version: 1,
@@ -144,6 +145,7 @@ it.layer(NodeServices.layer)("message context plumbing", (it) => {
       );
       const message = afterMessage.threads[0]?.messages[0];
       expect(message?.context).toEqual(context);
+      expect(message?.context?.gentleAiFlow).toBe("sdd-new");
 
       // A later non-streaming update without context keeps the original records.
       const afterUpdate = yield* projectEvent(

@@ -130,6 +130,10 @@ it.effect("reads the filesystem half of a project status without the CLI", () =>
       yield* fs.makeDirectory(path.join(workspaceRoot, "openspec", "changes", "archive"), {
         recursive: true,
       });
+      yield* fs.writeFileString(
+        path.join(workspaceRoot, "openspec", "config.yaml"),
+        "artifact_store: openspec\n",
+      );
       yield* fs.makeDirectory(path.join(workspaceRoot, ".atl"), { recursive: true });
       yield* fs.writeFileString(
         path.join(workspaceRoot, ".atl", "skill-registry.md"),
@@ -148,6 +152,7 @@ it.effect("reads the filesystem half of a project status without the CLI", () =>
       assert.isTrue(status.skillRegistry.present);
       assert.strictEqual(status.skillRegistry.skillCount, 1);
       assert.isNotNull(status.skillRegistry.updatedAt);
+      assert.isTrue(status.openspecConfigPresent);
       assert.isTrue(status.engramPresent);
       // Without the binary the CLI sub-checks are skipped rather than failed:
       // an uninstalled Gentle AI is not a project error.
@@ -170,6 +175,7 @@ it.effect("returns an empty project status for a workspace with no Gentle AI art
       assert.isFalse(status.skillRegistry.present);
       assert.isNull(status.skillRegistry.skillCount);
       assert.strictEqual(status.skillRegistry.path, ".atl/skill-registry.md");
+      assert.isFalse(status.openspecConfigPresent);
       assert.isFalse(status.engramPresent);
       assert.deepStrictEqual(status.errors, []);
     }),

@@ -84,6 +84,7 @@ describe("normalizeDispatchCommand attachments", () => {
           ],
           context: {
             version: 1,
+            gentleAiFlow: "sdd-new",
             records: [
               {
                 version: 1,
@@ -118,6 +119,8 @@ describe("normalizeDispatchCommand attachments", () => {
         attachmentId: persistedId,
       });
       expect(records[1]).toMatchObject({ kind: "skill", name: "review" });
+      // Rebinding rewrites records only; the flow marker rides through untouched.
+      expect(normalized.message.context?.gentleAiFlow).toBe("sdd-new");
     }).pipe(Effect.provide(testLayer)),
   );
 
