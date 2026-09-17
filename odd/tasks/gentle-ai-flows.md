@@ -75,4 +75,4 @@ timeline shows only raw tool calls; nothing tells the user a repo never ran `sdd
 
 ## Next step
 
-Push to the fork, then enter the receipt-driven review gate at the deliverable boundary (human consent required). Follow-ups: in-browser pass of the picker/banner/marks, rebuild the Windows installer with the rose icon, mobile composer flow picker.
+Pushed (5d11cee8..c7a681ff). Receipt-driven review not entered: with everything committed the workspace projection has base_tree == candidate_tree (nothing to freeze), and `review status --next-transition` first demands a provider-bound `gentle-ai.review-intended-untracked-selection/v1` JSON for the 56 Gradle-cache untracked paths whose exact schema is not exposed by the CLI help or the installed contract docs (a guessed shape is refused with `invalid_request`). A review of the pushed range needs a human-run `gentle-ai review start --base-ref 5d11cee8` decision. Follow-ups: in-browser pass of the picker/banner/marks, rebuild the Windows installer with the rose icon, mobile composer flow picker.
