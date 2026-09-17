@@ -166,7 +166,8 @@ import {
   THREAD_DISCLOSURE_TRANSITION_MS,
   WORK_GROUP_TOGGLE_HEIGHT,
 } from "./thread-work-log";
-import { appendPendingThreadMessages, type PendingThreadFeedEntry } from "./pending-thread-feed";
+import { appendPendingThreadMessages, type ThreadFeedRow } from "./pending-thread-feed";
+import { GENTLE_FLOW_GROUP_ACCENT, insertGentleFlowMarks } from "./gentleFlowMarks";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 import {
@@ -1342,7 +1343,7 @@ function useMarkdownStyles(
 }
 
 function renderFeedEntry(
-  info: { item: PendingThreadFeedEntry; index: number },
+  info: { item: ThreadFeedRow; index: number },
   props: Pick<
     ThreadFeedProps,
     | "environmentId"
@@ -1447,6 +1448,30 @@ function renderFeedEntry(
         shimmer={entry.shimmer}
         onToggle={() => props.onToggleWorkGroup(entry.groupId, entry.id)}
       />
+    );
+  }
+
+  // Same divider anatomy as context compaction, with the flow group's accent
+  // dot in place of an icon. Static: these sit in scroll-heavy history.
+  if (entry.type === "gentle-flow-start" || entry.type === "gentle-flow-end") {
+    const accent = GENTLE_FLOW_GROUP_ACCENT[entry.group];
+    return (
+      <View
+        accessible
+        accessibilityRole="none"
+        accessibilityLabel={entry.label}
+        className="mb-3 flex-row items-center gap-3 px-1 py-1"
+      >
+        <View className="h-px flex-1 bg-adaptive-neutral-200-a80-white-a8" />
+        <View className="shrink-0 flex-row items-center gap-1.5">
+          <View
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ backgroundColor: accent ?? iconSubtleColor }}
+          />
+          <Text className="font-t3-medium text-xs text-foreground-muted">{entry.label}</Text>
+        </View>
+        <View className="h-px flex-1 bg-adaptive-neutral-200-a80-white-a8" />
+      </View>
     );
   }
 
@@ -2435,16 +2460,21 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   }, [expandedWorkGroups]);
   const presentedFeed = useMemo(
     () =>
-      appendPendingThreadMessages(
-        deriveThreadFeedPresentation(
+      // Marks go over the outbox too: a queued flow message is announced as
+      // soon as it is written, before the server echoes it back.
+      insertGentleFlowMarks(
+        appendPendingThreadMessages(
+          deriveThreadFeedPresentation(
+            props.feed,
+            props.latestTurn,
+            expandedTurnIds,
+            expandedWorkGroupIds,
+            props.activeWorkStartedAt,
+          ),
           props.feed,
-          props.latestTurn,
-          expandedTurnIds,
-          expandedWorkGroupIds,
-          props.activeWorkStartedAt,
+          props.queuedMessages,
         ),
-        props.feed,
-        props.queuedMessages,
+        props.latestTurn ?? null,
       ),
     [
       props.queuedMessages,
@@ -2579,7 +2609,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     }
   }, [settleDisclosureAfterLayout]);
 
-  const shouldRestoreVisibleContentPosition = useCallback((entry: ThreadFeedEntry) => {
+  const shouldRestoreVisibleContentPosition = useCallback((entry: ThreadFeedRow) => {
     const disclosureAnchorKey = disclosureAnchorKeyRef.current;
     return disclosureAnchorKey === null || entry.id === disclosureAnchorKey;
   }, []);
@@ -2693,7 +2723,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   // exact; message rows stay undefined and use LegendList's per-type running
   // average once one of their type has been measured.
   const getFixedItemSize = useCallback(
-    (entry: ThreadFeedEntry) => {
+    (entry: ThreadFeedRow) => {
       if (workRowSizing.fixedRowHeight === undefined) {
         return undefined;
       }
@@ -2728,7 +2758,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   // Disclosures can mount existing offscreen rows as well as new work rows.
   // Fade those in after movement; never retain removed rows over replacements.
   const renderItem = useCallback(
-    (info: { item: PendingThreadFeedEntry; index: number }) => (
+    (info: { item: ThreadFeedRow; index: number }) => (
       <Animated.View
         key={info.item.id}
         entering={disclosureToggleSettling ? THREAD_FEED_DISCLOSURE_ENTER_TRANSITION : undefined}

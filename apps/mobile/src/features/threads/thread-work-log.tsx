@@ -1358,6 +1358,8 @@ function toolGroupSummarySymbolName(kind: ToolGroupSummaryKind): AppSymbolName {
     case "other":
       return { ios: "wrench", android: "build" };
     case "agent-tool":
+    case "skill":
+      // A Gentle AI skill run reads as agent work, not as another tool.
       return { ios: "sparkles", android: "auto_awesome" };
     case "tone-tool":
       return { ios: "bolt", android: "bolt" };
