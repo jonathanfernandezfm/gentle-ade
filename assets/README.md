@@ -49,6 +49,10 @@ Verify every result is 1024×1024 and has the classic macOS safe area: an 824×8
 
 Do not edit the generated PNG or ICO files directly.
 
+## Rose icon export without Icon Composer
+
+The Gentle ADE rose glyph is authored as SVG strokes in `scripts/export-rose-icons.ts`. Run `vp run icons:export:rose` from the repository root to rewrite each project's `text.svg`, `prod/logo.svg`, and every tracked raster (iOS, Linux, the pre-Tahoe macOS PNG, Windows and web ICOs, favicons, the `apps/web/public` and `apps/marketing/public` copies, the Android launcher, splash, monochrome and notification layers, and the iOS widget mark) with sharp/librsvg. It needs no macOS and no Icon Composer; renditions of 64px and below switch to a simplified, thicker-stroked glyph so the rose still reads in a favicon. `icons:export` and `icons:export:android` still work when Icon Composer is available, but they only re-export what this script already produced.
+
 ## Android launcher and splash artwork
 
 Android masks the central 72dp of a 108dp adaptive canvas, and the Android 12+ splash screen masks
